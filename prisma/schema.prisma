@@ -106,6 +106,9 @@ model Channel {
   streams            Stream[]
   viewers            Viewer[]
   rewardConfigs      RewardConfig[]
+  referrals             Referral[]
+  homeworkSubmissions    HomeworkSubmission[]
+  webhookConfigs        WebhookConfig[]
 
   @@index([ownerId])
   @@index([youtubeChannelId])
@@ -195,6 +198,15 @@ model Viewer {
   streamAttendances   StreamAttendance[]
   fraudEvents         FraudEvent[]
   rewardRedemptions   RewardRedemption[]
+  referralsMade         Referral[]          @relation("ReferralsMade")
+  referralsReceived     Referral[]          @relation("ReferralsReceived")
+  pollResponses         PollResponse[]
+  homeworkSubmitted     HomeworkSubmission[]
+  upvotesGiven          HelpfulUpvote[]     @relation("UpvotesGiven")
+  upvotesReceived       HelpfulUpvote[]     @relation("UpvotesReceived")
+  streakPauses          StreakPause[]
+  referredBy            Viewer?             @relation("ViewerReferrals", fields: [referredById], references: [id])
+  referredViewers       Viewer[]            @relation("ViewerReferrals")
   viewerAccountId     String?
   viewerAccount       ViewerAccount? @relation(fields: [viewerAccountId], references: [id])
 
@@ -266,6 +278,8 @@ model Stream {
   streamAttendances      StreamAttendance[]
   pointTransactions      PointTransaction[]
   fraudEvents            FraudEvent[]
+  polls                  StreamPoll[]
+  helpfulUpvotes         HelpfulUpvote[]
 
   @@unique([youtubeVideoId])
   @@index([channelId])
@@ -735,4 +749,171 @@ model ViewerAccount {
 
   @@index([googleId])
   @@index([email])
+}
+
+// ============================================
+// REFERRAL SYSTEM
+// ============================================
+
+model Referral {
+  id                String    @id @default(cuid())
+  referrerId        String
+  referredId        String
+  channelId         String
+
+  referredAttended  Boolean   @default(false)
+  referredPurchased Boolean   @default(false)
+  referrerPointsAwarded Int   @default(0)
+  referredPointsAwarded Int   @default(0)
+
+  createdAt         DateTime  @default(now())
+  convertedAt       DateTime?
+
+  referrer          Viewer    @relation("ReferralsMade", fields: [referrerId], references: [id], onDelete: Cascade)
+  referred          Viewer    @relation("ReferralsReceived", fields: [referredId], references: [id], onDelete: Cascade)
+  channel           Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([referrerId, referredId, channelId])
+  @@index([referrerId])
+  @@index([referredId])
+  @@index([channelId])
+}
+
+// ============================================
+// STREAM POLLS
+// ============================================
+
+model StreamPoll {
+  id                String    @id @default(cuid())
+  streamId          String
+  question          String
+  options           Json
+  isActive          Boolean   @default(true)
+  closedAt          DateTime?
+  createdAt         DateTime  @default(now())
+
+  stream            Stream    @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  responses         PollResponse[]
+
+  @@index([streamId])
+}
+
+model PollResponse {
+  id                String    @id @default(cuid())
+  pollId            String
+  viewerId          String
+  selectedOption    Int
+  pointsAwarded     Int       @default(15)
+  createdAt         DateTime  @default(now())
+
+  poll              StreamPoll @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  viewer            Viewer     @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+
+  @@unique([pollId, viewerId])
+  @@index([viewerId])
+}
+
+// ============================================
+// HOMEWORK SUBMISSIONS
+// ============================================
+
+model HomeworkSubmission {
+  id                String          @id @default(cuid())
+  viewerId          String
+  channelId         String
+  title             String
+  content           String
+  imageUrl          String?
+  status            HomeworkStatus  @default(PENDING)
+  reviewedBy        String?
+  pointsAwarded     Int             @default(0)
+  createdAt         DateTime        @default(now())
+  reviewedAt        DateTime?
+
+  viewer            Viewer    @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+  channel           Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@index([viewerId])
+  @@index([channelId])
+  @@index([status])
+}
+
+enum HomeworkStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// ============================================
+// WEBHOOK CONFIGURATION
+// ============================================
+
+model WebhookConfig {
+  id                String    @id @default(cuid())
+  channelId         String
+  url               String
+  events            Json
+  secret            String
+  isActive          Boolean   @default(true)
+  lastTriggeredAt   DateTime?
+  failureCount      Int       @default(0)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  channel           Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@index([channelId])
+}
+
+model WebhookDelivery {
+  id                String    @id @default(cuid())
+  webhookId         String
+  event             String
+  payload           Json
+  statusCode        Int?
+  response          String?
+  deliveredAt       DateTime?
+  createdAt         DateTime  @default(now())
+
+  @@index([webhookId])
+  @@index([event])
+}
+
+// ============================================
+// HELPFUL UPVOTES
+// ============================================
+
+model HelpfulUpvote {
+  id                String    @id @default(cuid())
+  giverId           String
+  receiverId        String
+  streamId          String
+  createdAt         DateTime  @default(now())
+
+  giver             Viewer    @relation("UpvotesGiven", fields: [giverId], references: [id], onDelete: Cascade)
+  receiver          Viewer    @relation("UpvotesReceived", fields: [receiverId], references: [id], onDelete: Cascade)
+  stream            Stream    @relation(fields: [streamId], references: [id], onDelete: Cascade)
+
+  @@unique([giverId, receiverId, streamId])
+  @@index([receiverId])
+  @@index([streamId])
+}
+
+// ============================================
+// STREAK PAUSE LOG
+// ============================================
+
+model StreakPause {
+  id                String    @id @default(cuid())
+  viewerId          String
+  pauseType         String
+  pointsCost        Int       @default(0)
+  startedAt         DateTime
+  endsAt            DateTime
+  wasUsed           Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+
+  viewer            Viewer    @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+
+  @@index([viewerId])
 }
