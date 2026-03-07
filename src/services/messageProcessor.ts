@@ -8,6 +8,7 @@ import { processFraudCheck } from './fraudDetection'
 import { calculateBonuses, isEarlyBirdEligible } from './bonusCalculator'
 import { LiveChatMessage } from '@/lib/youtube'
 import { getRankForPoints } from '@/lib/ranks'
+import { parseChatCommand } from '@/services/chatCommandParser'
 
 // ============================================
 // CODE DETECTION
@@ -96,6 +97,104 @@ export async function processMessage(
     )
     pointsAwarded = redemptionResult.pointsAwarded
     fraudDetected = redemptionResult.fraudDetected
+  }
+
+  // Process chat commands (!helpful, !goodq, etc.)
+  const command = parseChatCommand(message.messageText)
+  if (command) {
+    switch (command.type) {
+      case 'helpful': {
+        // Find target viewer by display name in same channel
+        const target = await prisma.viewer.findFirst({
+          where: { displayName: command.targetUsername, channelId },
+          select: { id: true, availablePoints: true },
+        })
+        if (target && target.id !== viewer.id) {
+          // Check cap: max 5 upvotes given per viewer per stream
+          const givenCount = await prisma.helpfulUpvote.count({
+            where: { giverId: viewer.id, streamId },
+          })
+          if (givenCount < 5) {
+            // Check cap: max 5 upvotes received per target per stream (5 * 5pts = 25 cap)
+            const receivedCount = await prisma.helpfulUpvote.count({
+              where: { receiverId: target.id, streamId },
+            })
+            if (receivedCount < 5) {
+              try {
+                await prisma.$transaction([
+                  prisma.helpfulUpvote.create({
+                    data: { giverId: viewer.id, receiverId: target.id, streamId },
+                  }),
+                  prisma.viewer.update({
+                    where: { id: target.id },
+                    data: {
+                      helpfulUpvotesReceived: { increment: 1 },
+                      availablePoints: { increment: 5 },
+                      totalPoints: { increment: 5 },
+                      lifetimePoints: { increment: 5 },
+                    },
+                  }),
+                  prisma.viewer.update({
+                    where: { id: viewer.id },
+                    data: { helpfulUpvotesGiven: { increment: 1 } },
+                  }),
+                  prisma.pointTransaction.create({
+                    data: {
+                      viewerId: target.id,
+                      streamId,
+                      type: 'HELPFUL_UPVOTE',
+                      amount: 5,
+                      balanceBefore: target.availablePoints,
+                      balanceAfter: target.availablePoints + 5,
+                      description: `Helpful upvote from ${message.authorDisplayName}`,
+                    },
+                  }),
+                ])
+              } catch {
+                // Unique constraint violation = already upvoted this person in this stream
+              }
+            }
+          }
+        }
+        break
+      }
+      case 'goodq': {
+        // Only moderators can use !goodq
+        if (viewer.isModerator) {
+          const target = await prisma.viewer.findFirst({
+            where: { displayName: command.targetUsername, channelId },
+            select: { id: true, availablePoints: true },
+          })
+          if (target) {
+            await prisma.$transaction([
+              prisma.viewer.update({
+                where: { id: target.id },
+                data: {
+                  qualityQuestionsCount: { increment: 1 },
+                  availablePoints: { increment: 20 },
+                  totalPoints: { increment: 20 },
+                  lifetimePoints: { increment: 20 },
+                },
+              }),
+              prisma.pointTransaction.create({
+                data: {
+                  viewerId: target.id,
+                  streamId,
+                  type: 'QUALITY_QUESTION',
+                  amount: 20,
+                  balanceBefore: target.availablePoints,
+                  balanceAfter: target.availablePoints + 20,
+                  description: 'Quality question recognized by moderator',
+                },
+              }),
+            ])
+          }
+        }
+        break
+      }
+      default:
+        break
+    }
   }
 
   return {

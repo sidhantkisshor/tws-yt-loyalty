@@ -35,6 +35,31 @@ export const rewardConfigSchema = z.object({
     .int('Token cost must be an integer')
     .positive('Token cost must be positive')
     .max(1000000, 'Token cost too high'),
+  pointsCost: z
+    .number()
+    .int('Points cost must be an integer')
+    .min(0, 'Points cost cannot be negative')
+    .optional(),
+  category: z
+    .enum(['GATEWAY', 'ENGAGEMENT', 'COMMITMENT', 'PREMIUM', 'PRESTIGE', 'ROTATING'])
+    .optional(),
+  funnelPosition: z
+    .number()
+    .int('Funnel position must be an integer')
+    .optional(),
+  externalCourseId: z
+    .string()
+    .optional(),
+  externalModuleId: z
+    .string()
+    .optional(),
+  isLimitedTime: z
+    .boolean()
+    .optional(),
+  limitedTimeEndsAt: z
+    .string()
+    .datetime()
+    .optional(),
   isActive: z.boolean().default(true),
   stockQuantity: z
     .number()
