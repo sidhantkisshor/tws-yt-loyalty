@@ -18,11 +18,10 @@ interface ViewerProfile {
   rank: string
   currentStreak: number
   longestStreak: number
-  streakPauseEndsAt: string | null
+  pauseEndsAt: string | null
   shortPausesUsedThisMonth: number
   longPausesUsedThisMonth: number
   referralCode: string | null
-  referralCount: number
   channel: {
     id: string
     title: string

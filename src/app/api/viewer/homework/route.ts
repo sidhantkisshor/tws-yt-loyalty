@@ -9,7 +9,7 @@ const submitHomeworkSchema = z.object({
   channelId: z.string().min(1),
   title: z.string().min(3).max(200),
   content: z.string().min(10).max(2000),
-  imageUrl: z.string().url().optional(),
+  imageUrl: z.string().url().nullish(),
 })
 
 // GET /api/viewer/homework - List viewer's homework submissions
@@ -44,7 +44,17 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       },
     })
 
-    return NextResponse.json({ submissions })
+    return NextResponse.json({
+      submissions: submissions.map((s) => ({
+        id: s.id,
+        title: s.title,
+        content: s.content,
+        imageUrl: s.imageUrl,
+        status: s.status,
+        submittedAt: s.createdAt.toISOString(),
+        reviewedAt: s.reviewedAt?.toISOString() || null,
+      })),
+    })
   } catch (error) {
     logger.error('List homework submissions error', error)
     return NextResponse.json(

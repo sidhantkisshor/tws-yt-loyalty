@@ -224,14 +224,20 @@ export default function StreamManagePage({
 
   function getRankBadgeColor(rank: string): string {
     switch (rank) {
-      case 'INNER_CIRCLE':
+      case 'WHALE':
         return 'bg-purple-600'
-      case 'ARCHITECT':
+      case 'HEDGE_FUND':
         return 'bg-yellow-600'
-      case 'SNIPER':
-        return 'bg-gray-400'
-      case 'OPERATOR':
+      case 'MARKET_MAKER':
+        return 'bg-cyan-500'
+      case 'FUND_MANAGER':
         return 'bg-orange-600'
+      case 'SWING_TRADER':
+        return 'bg-blue-500'
+      case 'RETAIL_TRADER':
+        return 'bg-green-600'
+      case 'PAPER_TRADER':
+        return 'bg-gray-600'
       default:
         return 'bg-gray-600'
     }

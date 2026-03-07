@@ -26,7 +26,7 @@ export default function StreakPage() {
 
   const currentStreak = viewer?.currentStreak ?? 0
   const longestStreak = viewer?.longestStreak ?? 0
-  const pauseEndsAt = viewer?.streakPauseEndsAt ? new Date(viewer.streakPauseEndsAt) : null
+  const pauseEndsAt = viewer?.pauseEndsAt ? new Date(viewer.pauseEndsAt) : null
   const isPaused = pauseEndsAt && pauseEndsAt.getTime() > Date.now()
   const shortPausesUsed = viewer?.shortPausesUsedThisMonth ?? 0
   const longPausesUsed = viewer?.longPausesUsedThisMonth ?? 0
@@ -38,10 +38,10 @@ export default function StreakPage() {
 
     setActivating(true)
     try {
-      const res = await fetch('/api/viewer/streak/pause', {
+      const res = await fetch(`/api/viewer/streak/pause?channelId=${activeChannelId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ channelId: activeChannelId, pauseType }),
+        body: JSON.stringify({ pauseType }),
       })
       if (res.ok) {
         refreshProfile?.()

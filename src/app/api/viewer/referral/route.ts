@@ -14,8 +14,22 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    // Determine target viewer ID based on channel selection
+    let targetViewerId = session.viewerId
+    const { searchParams } = new URL(request.url)
+    const channelId = searchParams.get('channelId')
+
+    if (channelId && session.availableChannels) {
+      const channelData = session.availableChannels.find((c: { channelId: string; viewerId: string }) => c.channelId === channelId)
+      if (channelData) {
+        targetViewerId = channelData.viewerId
+      } else {
+        return NextResponse.json({ error: 'Unauthorized for this channel' }, { status: 403 })
+      }
+    }
+
     const viewer = await prisma.viewer.findUnique({
-      where: { id: session.viewerId },
+      where: { id: targetViewerId },
       select: { id: true, referralCode: true },
     })
 
@@ -23,20 +37,23 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: 'Viewer not found' }, { status: 404 })
     }
 
-    // If referral code already exists, return it
-    if (viewer.referralCode) {
-      return NextResponse.json({ referralCode: viewer.referralCode })
+    let referralCode = viewer.referralCode
+
+    // Generate a new referral code if none exists
+    if (!referralCode) {
+      referralCode = nanoid(10)
+      await prisma.viewer.update({
+        where: { id: viewer.id },
+        data: { referralCode },
+      })
     }
 
-    // Generate a new referral code and save it
-    const referralCode = nanoid(10)
-
-    await prisma.viewer.update({
-      where: { id: viewer.id },
-      data: { referralCode },
+    // Count referrals (those who attended at least)
+    const referralCount = await prisma.referral.count({
+      where: { referrerId: targetViewerId, referredAttended: true },
     })
 
-    return NextResponse.json({ referralCode })
+    return NextResponse.json({ referralCode, referralCount })
   } catch (error) {
     logger.error('Get referral code error', error)
     return NextResponse.json(
