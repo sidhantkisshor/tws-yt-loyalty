@@ -1,0 +1,62 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm run build",
+  "framework": "nextjs",
+  "regions": ["iad1"],
+  "functions": {
+    "src/app/api/**/*.ts": {
+      "maxDuration": 30
+    },
+    "src/app/api/streams/[id]/poll/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/cron/poll-streams/route.ts": {
+      "maxDuration": 300
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/poll-streams",
+      "schedule": "*/3 * * * *"
+    },
+    {
+      "path": "/api/cron/tier-decay",
+      "schedule": "0 0 * * *"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store, no-cache, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-DNS-Prefetch-Control",
+          "value": "on"
+        }
+      ]
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/admin",
+      "destination": "/admin/page",
+      "permanent": false
+    },
+    {
+      "source": "/viewer",
+      "destination": "/viewer/page",
+      "permanent": false
+    }
+  ],
+  "env": {
+    "NODE_ENV": "production"
+  }
+}
