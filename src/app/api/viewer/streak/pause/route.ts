@@ -128,7 +128,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
       // Create cost transaction if applicable
       if (cost > 0) {
-        await tx.pointTransaction.create({
+        await tx.pointLedger.create({
           data: {
             viewerId: targetViewerId,
             type: 'STREAK_PAUSE_COST',

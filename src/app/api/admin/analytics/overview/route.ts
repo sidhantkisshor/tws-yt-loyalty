@@ -83,7 +83,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       }),
 
       // Points issued (positive transactions)
-      prisma.pointTransaction.aggregate({
+      prisma.pointLedger.aggregate({
         where: {
           viewer: { channelId },
           amount: { gt: 0 },
@@ -92,7 +92,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       }),
 
       // Points redeemed (negative transactions)
-      prisma.pointTransaction.aggregate({
+      prisma.pointLedger.aggregate({
         where: {
           viewer: { channelId },
           amount: { lt: 0 },

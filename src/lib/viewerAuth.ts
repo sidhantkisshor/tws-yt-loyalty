@@ -31,13 +31,13 @@ export const viewerAuthOptions: NextAuthOptions = {
       const email = user.email || ''
 
       try {
-        // 1. Get or Create ViewerAccount
-        let viewerAccount = await prisma.viewerAccount.findUnique({
+        // 1. Get or Create FanProfile
+        let fanProfile = await prisma.fanProfile.findUnique({
           where: { googleId },
         })
 
-        if (!viewerAccount) {
-          viewerAccount = await prisma.viewerAccount.create({
+        if (!fanProfile) {
+          fanProfile = await prisma.fanProfile.create({
             data: {
               googleId,
               email,
@@ -95,11 +95,11 @@ export const viewerAuthOptions: NextAuthOptions = {
               profileImageUrl: channelThumbnail,
               channelId: channel.id,
               trustScore: 50,
-              viewerAccountId: viewerAccount.id,
+              fanProfileId: fanProfile.id,
             },
             update: {
               // Ensure link to account if it existed but wasn't linked
-              viewerAccountId: viewerAccount.id,
+              fanProfileId: fanProfile.id,
               // Update profile info
               displayName: channelTitle,
               profileImageUrl: channelThumbnail,
@@ -130,7 +130,7 @@ export const viewerAuthOptions: NextAuthOptions = {
       if (token && token.googleId) {
         const googleId = token.googleId as string
 
-        const viewerAccount = await prisma.viewerAccount.findUnique({
+        const fanProfile = await prisma.fanProfile.findUnique({
           where: { googleId },
           include: {
             viewers: {
@@ -143,14 +143,14 @@ export const viewerAuthOptions: NextAuthOptions = {
           }
         })
 
-        if (viewerAccount && viewerAccount.viewers.length > 0) {
-          const defaultViewer = viewerAccount.viewers[0]
+        if (fanProfile && fanProfile.viewers.length > 0) {
+          const defaultViewer = fanProfile.viewers[0]
 
           session.viewerId = defaultViewer.id
           session.isViewer = true
 
           // Populate available channels for multi-channel viewer resolution
-          session.availableChannels = viewerAccount.viewers.map(v => ({
+          session.availableChannels = fanProfile.viewers.map(v => ({
             channelId: v.channel.id,
             channelTitle: v.channel.title,
             viewerId: v.id,

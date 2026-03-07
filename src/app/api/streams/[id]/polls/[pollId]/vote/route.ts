@@ -82,7 +82,7 @@ export async function POST(
       })
 
       // Create point transaction
-      await tx.pointTransaction.create({
+      await tx.pointLedger.create({
         data: {
           viewerId,
           streamId,

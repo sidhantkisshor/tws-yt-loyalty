@@ -138,7 +138,7 @@ export async function processMessage(
                     where: { id: viewer.id },
                     data: { helpfulUpvotesGiven: { increment: 1 } },
                   }),
-                  prisma.pointTransaction.create({
+                  prisma.pointLedger.create({
                     data: {
                       viewerId: target.id,
                       streamId,
@@ -176,7 +176,7 @@ export async function processMessage(
                   lifetimePoints: { increment: 20 },
                 },
               }),
-              prisma.pointTransaction.create({
+              prisma.pointLedger.create({
                 data: {
                   viewerId: target.id,
                   streamId,
@@ -483,7 +483,7 @@ async function processCodeRedemption(
       })
 
       // Create transaction record
-      await tx.pointTransaction.create({
+      await tx.pointLedger.create({
         data: {
           viewerId,
           streamId,

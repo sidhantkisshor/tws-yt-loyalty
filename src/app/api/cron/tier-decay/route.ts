@@ -62,7 +62,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
       for (const viewer of viewers) {
         // Sum positive points earned in last 90 days
-        const pointsResult = await prisma.pointTransaction.aggregate({
+        const pointsResult = await prisma.pointLedger.aggregate({
           where: {
             viewerId: viewer.id,
             amount: { gt: 0 },
