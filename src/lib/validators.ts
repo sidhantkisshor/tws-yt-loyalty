@@ -20,9 +20,9 @@ export const rewardConfigSchema = z.object({
     .trim(),
   description: z
     .string()
-    .min(1, 'Description is required')
     .max(500, 'Description must be 500 characters or less')
-    .trim(),
+    .trim()
+    .nullish(),
   imageUrl: z
     .string()
     .url('Invalid image URL')

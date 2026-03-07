@@ -156,7 +156,7 @@ function ViewerLayoutContent({ children }: { children: React.ReactNode }) {
                   <div className="flex items-center gap-3">
                     <div className="text-right hidden lg:block">
                       <p className="text-sm font-medium text-white">{viewer.displayName}</p>
-                      <p className="text-xs text-[var(--neon-purple)]">{viewer.rank?.replace('_', ' ') || 'OBSERVER'}</p>
+                      <p className="text-xs text-[var(--neon-purple)]">{viewer.rank?.replace(/_/g, ' ') || 'Paper Trader'}</p>
                     </div>
                     {viewer.profileImageUrl ? (
                       <div className="relative">
