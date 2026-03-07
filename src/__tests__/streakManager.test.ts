@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest'
 import {
-  STREAK_DAILY_BONUS,
   STREAK_MILESTONES,
   calculateStreakBonus,
   getStreakMilestoneBonus,
@@ -9,20 +8,6 @@ import {
   getPauseDurationDays,
   isStreakProtectedByPause,
 } from '@/services/streakManager'
-
-describe('STREAK_DAILY_BONUS', () => {
-  it('should map day 2 to 10 points', () => {
-    expect(STREAK_DAILY_BONUS[2]).toBe(10)
-  })
-
-  it('should map day 3 to 15 points', () => {
-    expect(STREAK_DAILY_BONUS[3]).toBe(15)
-  })
-
-  it('should map day 4 to 20 points', () => {
-    expect(STREAK_DAILY_BONUS[4]).toBe(20)
-  })
-})
 
 describe('STREAK_MILESTONES', () => {
   it('should have the correct milestone values', () => {

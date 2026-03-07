@@ -6,7 +6,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ============================================
@@ -220,6 +222,7 @@ model Viewer {
   @@index([channelId, trustScore]) // Composite for fraud queries filtering by channel and trust
   @@index([channelId, totalPoints]) // Composite for leaderboard queries
   @@index([isBanned]) // For filtering banned viewers
+  @@index([currentSegment]) // For segment distribution analytics
 }
 
 enum ViewerRank {

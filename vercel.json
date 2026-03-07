@@ -12,6 +12,12 @@
     },
     "src/app/api/cron/poll-streams/route.ts": {
       "maxDuration": 300
+    },
+    "src/app/api/cron/tier-decay/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/cron/update-segments/route.ts": {
+      "maxDuration": 300
     }
   },
   "crons": [

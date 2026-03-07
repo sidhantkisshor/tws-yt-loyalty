@@ -43,10 +43,11 @@ export function buildWebhookPayload(
  * Returns the signature as a hex string.
  */
 export function signPayload(payload: string, secret: string): string {
-  return crypto
+  const hex = crypto
     .createHmac('sha256', secret)
     .update(payload)
     .digest('hex')
+  return `sha256=${hex}`
 }
 
 // ============================================

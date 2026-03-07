@@ -31,10 +31,8 @@ async function migrateRanks() {
 
   for (const [oldRank, newRank] of Object.entries(RANK_MAP)) {
     try {
-      // Use raw SQL to handle the case where old enum values may or may not exist
-      const result = await prisma.$executeRawUnsafe(
-        `UPDATE "Viewer" SET "rank" = '${newRank}' WHERE "rank" = '${oldRank}'`
-      )
+      // Use parameterized raw SQL to handle the case where old enum values may or may not exist
+      const result = await prisma.$executeRaw`UPDATE "Viewer" SET "rank" = ${newRank}::"ViewerRank" WHERE "rank"::text = ${oldRank}`
       if (result > 0) {
         console.log(`  Migrated ${result} viewers from ${oldRank} -> ${newRank}`)
         totalMigrated += result

@@ -12,7 +12,7 @@ import { z } from 'zod'
 // ============================================
 
 export const rewardConfigSchema = z.object({
-  channelId: z.string().uuid({ message: 'Invalid channel ID format' }),
+  channelId: z.string().min(1, { message: 'Channel ID is required' }),
   name: z
     .string()
     .min(1, 'Name is required')
@@ -74,7 +74,7 @@ export const rewardConfigSchema = z.object({
 // ============================================
 
 export const createStreamSchema = z.object({
-  channelId: z.string().uuid({ message: 'Invalid channel ID format' }),
+  channelId: z.string().min(1, { message: 'Channel ID is required' }),
   youtubeVideoId: z
     .string()
     .min(1, 'YouTube video ID is required')
@@ -152,7 +152,7 @@ export const loyaltyCodeSchema = z.object({
 // ============================================
 
 export const redeemRewardSchema = z.object({
-  rewardId: z.string().uuid({ message: 'Invalid reward ID format' }),
+  rewardId: z.string().min(1, { message: 'Reward ID is required' }),
   shippingAddress: z
     .object({
       fullName: z
@@ -208,7 +208,7 @@ export const redeemCodeSchema = z.object({
     .max(20, 'Code must be 20 characters or less')
     .toUpperCase()
     .trim(),
-  channelId: z.string().uuid({ message: 'Invalid channel ID format' }),
+  channelId: z.string().min(1, { message: 'Channel ID is required' }),
 })
 
 // ============================================
@@ -216,7 +216,7 @@ export const redeemCodeSchema = z.object({
 // ============================================
 
 export const pointAdjustmentSchema = z.object({
-  viewerId: z.string().uuid({ message: 'Invalid viewer ID format' }),
+  viewerId: z.string().min(1, { message: 'Viewer ID is required' }),
   amount: z
     .number()
     .int('Point amount must be an integer')

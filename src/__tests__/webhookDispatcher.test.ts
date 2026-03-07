@@ -78,11 +78,11 @@ describe('signPayload', () => {
     expect(sig1).not.toBe(sig2)
   })
 
-  it('should produce a hex string', () => {
+  it('should produce a sha256-prefixed hex string', () => {
     const sig = signPayload('test-payload', 'test-secret')
 
-    // HMAC SHA-256 hex output is 64 characters (32 bytes)
-    expect(sig).toMatch(/^[0-9a-f]{64}$/)
+    // HMAC SHA-256 hex output is "sha256=" + 64 hex characters (32 bytes)
+    expect(sig).toMatch(/^sha256=[0-9a-f]{64}$/)
   })
 
   it('should produce different HMAC for different payloads', () => {

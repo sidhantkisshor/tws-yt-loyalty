@@ -1,16 +1,6 @@
 export type PauseType = '3day' | '7day'
 
 /**
- * Daily streak bonus mapping: streak day -> bonus points.
- * Days 2-4 have explicit values; day 5+ is capped at 25.
- */
-export const STREAK_DAILY_BONUS: Record<number, number> = {
-  2: 10,
-  3: 15,
-  4: 20,
-}
-
-/**
  * Milestone day -> bonus points awarded when a streak reaches that day.
  */
 export const STREAK_MILESTONES: Record<number, number> = {

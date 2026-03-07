@@ -5,6 +5,33 @@ import prisma from '@/lib/prisma'
 import { nanoid } from 'nanoid'
 import { adminReadLimiter, adminWriteLimiter, getRateLimitIdentifier, checkRateLimit } from '@/lib/rateLimits'
 import { logger } from '@/lib/logger'
+import type { WebhookEvent } from '@/services/webhookDispatcher'
+
+const VALID_WEBHOOK_EVENTS: WebhookEvent[] = [
+  'viewer.tier_changed',
+  'viewer.reward_redeemed',
+  'viewer.segment_changed',
+  'viewer.referral_converted',
+  'viewer.milestone_reached',
+  'stream.ended',
+]
+
+const BLOCKED_HOSTNAMES = new Set([
+  'localhost', '127.0.0.1', '0.0.0.0', '[::1]',
+])
+
+function isInternalUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol !== 'https:') return true
+    if (BLOCKED_HOSTNAMES.has(parsed.hostname)) return true
+    // Block private IP ranges
+    if (/^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.)/.test(parsed.hostname)) return true
+    return false
+  } catch {
+    return true
+  }
+}
 
 // GET: List webhooks for a channel (admin auth, channelId query param)
 export async function GET(request: NextRequest): Promise<NextResponse> {
@@ -104,20 +131,25 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       )
     }
 
-    // Validate URL
-    try {
-      new URL(url)
-    } catch {
+    // Validate URL (must be HTTPS, no internal IPs)
+    if (isInternalUrl(url)) {
       return NextResponse.json(
-        { error: 'Invalid URL' },
+        { error: 'URL must be a valid external HTTPS URL' },
         { status: 400 }
       )
     }
 
-    // Validate events is a non-empty array of strings
-    if (!Array.isArray(events) || events.length === 0 || !events.every((e) => typeof e === 'string')) {
+    // Validate events is a non-empty array of known webhook event types
+    if (!Array.isArray(events) || events.length === 0) {
       return NextResponse.json(
-        { error: 'events must be a non-empty array of strings' },
+        { error: 'events must be a non-empty array' },
+        { status: 400 }
+      )
+    }
+    const invalidEvents = events.filter((e) => !VALID_WEBHOOK_EVENTS.includes(e as WebhookEvent))
+    if (invalidEvents.length > 0) {
+      return NextResponse.json(
+        { error: `Invalid webhook events: ${invalidEvents.join(', ')}. Valid events: ${VALID_WEBHOOK_EVENTS.join(', ')}` },
         { status: 400 }
       )
     }
