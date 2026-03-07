@@ -1,0 +1,738 @@
+// YouTube Loyalty System - Database Schema
+// Prisma schema for cross-stream loyalty points system
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================
+// ADMIN/STREAMER ACCOUNTS
+// ============================================
+
+model User {
+  id                 String    @id @default(cuid())
+  email              String    @unique
+  name               String?
+  image              String?
+  emailVerified      DateTime?
+  role               UserRole  @default(STREAMER)
+
+  // OAuth tokens for YouTube API
+  googleAccessToken  String?
+  googleRefreshToken String?
+  googleTokenExpiry  DateTime?
+
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  // Relations
+  channels           Channel[]
+  accounts           Account[]
+  sessions           Session[]
+
+  @@index([email])
+}
+
+model Account {
+  id                       String  @id @default(cuid())
+  userId                   String
+  type                     String
+  provider                 String
+  providerAccountId        String
+  refresh_token            String?
+  access_token             String?
+  expires_at               Int?
+  token_type               String?
+  scope                    String?
+  id_token                 String?
+  session_state            String?
+  refresh_token_expires_in Int?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+enum UserRole {
+  ADMIN
+  STREAMER
+}
+
+// ============================================
+// YOUTUBE CHANNEL MANAGEMENT
+// ============================================
+
+model Channel {
+  id                 String    @id @default(cuid())
+  youtubeChannelId   String    @unique
+  title              String
+  thumbnailUrl       String?
+  ownerId            String
+  isActive           Boolean   @default(true)
+
+  // Quota management
+  dailyQuotaUsed     Int       @default(0)
+  dailyQuotaResetAt  DateTime  @default(now())
+  quotaLimit         Int       @default(10000)
+
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  // Relations
+  owner              User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  streams            Stream[]
+  viewers            Viewer[]
+  rewardConfigs      RewardConfig[]
+
+  @@index([ownerId])
+  @@index([youtubeChannelId])
+}
+
+// ============================================
+// VIEWER MANAGEMENT (YouTube Chat Users)
+// ============================================
+
+model Viewer {
+  id                  String    @id @default(cuid())
+  youtubeChannelId    String    // Their YouTube channel ID from chat
+  displayName         String
+  profileImageUrl     String?
+  channelId           String    // Which streamer channel they belong to
+
+  // Points & Status
+  totalPoints         Int       @default(0)
+  availablePoints     Int       @default(0)
+  lifetimePoints      Int       @default(0)
+
+  // Rank
+  rank                ViewerRank @default(PAPER_TRADER)
+
+  // Trust & Anti-Fraud
+  trustScore          Float     @default(50.0)
+  isBanned            Boolean   @default(false)
+  banReason           String?
+  bannedAt            DateTime?
+  bannedBy            String?
+
+  // Engagement Metrics
+  firstSeenAt         DateTime  @default(now())
+  lastSeenAt          DateTime  @default(now())
+  totalStreamsAttended Int      @default(0)
+  totalMessagesCount  Int       @default(0)
+  totalCodesRedeemed  Int       @default(0)
+  currentStreak       Int       @default(0)
+  longestStreak       Int       @default(0)
+  lastStreamAttended  String?
+
+  // YouTube status flags
+  isMember            Boolean   @default(false)
+  isModerator         Boolean   @default(false)
+
+  // Watch time tracking
+  totalWatchTimeMinutes Int     @default(0)
+
+  // Prestige tier fields
+  hasPurchasedCourse        Boolean   @default(false)
+  hasPurchasedPremiumCohort Boolean   @default(false)
+  courseCompleted            Boolean   @default(false)
+  premiumCohortCompleted    Boolean   @default(false)
+  purchasedCourseId         String?
+  purchasedCohortId         String?
+
+  // Community contribution
+  helpfulUpvotesReceived    Int       @default(0)
+  helpfulUpvotesGiven       Int       @default(0)
+  qualityQuestionsCount     Int       @default(0)
+  homeworkSubmissions        Int       @default(0)
+
+  // Referral tracking
+  referralCode              String?   @unique
+  referredById              String?
+
+  // Streak pause
+  activePauseType           String?
+  pauseStartedAt            DateTime?
+  pauseEndsAt               DateTime?
+  shortPausesUsedThisMonth  Int       @default(0)
+  longPausesUsedThisMonth   Int       @default(0)
+  lastPauseResetMonth       Int?
+
+  // Segment
+  currentSegment            String?
+  segmentUpdatedAt          DateTime?
+
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  // Relations
+  channel             Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  pointTransactions   PointTransaction[]
+  codeRedemptions     CodeRedemption[]
+  chatMessages        ChatMessage[]
+  streamAttendances   StreamAttendance[]
+  fraudEvents         FraudEvent[]
+  rewardRedemptions   RewardRedemption[]
+  viewerAccountId     String?
+  viewerAccount       ViewerAccount? @relation(fields: [viewerAccountId], references: [id])
+
+  @@unique([youtubeChannelId, channelId])
+  @@index([viewerAccountId])
+  @@index([channelId])
+  @@index([youtubeChannelId])
+  @@index([trustScore])
+  @@index([totalPoints])
+  @@index([rank])
+  @@index([channelId, trustScore]) // Composite for fraud queries filtering by channel and trust
+  @@index([channelId, totalPoints]) // Composite for leaderboard queries
+  @@index([isBanned]) // For filtering banned viewers
+}
+
+enum ViewerRank {
+  PAPER_TRADER
+  RETAIL_TRADER
+  SWING_TRADER
+  FUND_MANAGER
+  MARKET_MAKER
+  HEDGE_FUND
+  WHALE
+}
+
+// ============================================
+// STREAM & LIVE SESSION MANAGEMENT
+// ============================================
+
+model Stream {
+  id                     String       @id @default(cuid())
+  channelId              String
+  youtubeVideoId         String
+  youtubeLiveChatId      String?
+  title                  String
+  thumbnailUrl           String?
+  status                 StreamStatus @default(SCHEDULED)
+
+  // Timing
+  scheduledStartAt       DateTime?
+  actualStartAt          DateTime?
+  endedAt                DateTime?
+
+  // Polling state
+  isPollingActive        Boolean      @default(false)
+  lastPollAt             DateTime?
+  pollIntervalMs         Int          @default(4000)
+  nextPageToken          String?
+  quotaUsedThisStream    Int          @default(0)
+
+  // CTA tracking
+  ctaTimestamp              DateTime?
+  ctaPointsAwarded          Boolean   @default(false)
+
+  // Stats
+  peakConcurrentChatters Int          @default(0)
+  totalUniqueChatters    Int          @default(0)
+  totalMessagesProcessed Int          @default(0)
+  totalCodesGenerated    Int          @default(0)
+  totalPointsAwarded     Int          @default(0)
+
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
+
+  // Relations
+  channel                Channel      @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  loyaltyCodes           LoyaltyCode[]
+  chatMessages           ChatMessage[]
+  streamAttendances      StreamAttendance[]
+  pointTransactions      PointTransaction[]
+  fraudEvents            FraudEvent[]
+
+  @@unique([youtubeVideoId])
+  @@index([channelId])
+  @@index([status])
+  @@index([actualStartAt])
+}
+
+enum StreamStatus {
+  SCHEDULED
+  LIVE
+  ENDED
+  CANCELLED
+}
+
+model StreamAttendance {
+  id              String    @id @default(cuid())
+  streamId        String
+  viewerId        String
+
+  // Attendance tracking
+  firstMessageAt  DateTime
+  lastMessageAt   DateTime
+  messageCount    Int       @default(0)
+  codesRedeemed   Int       @default(0)
+  pointsEarned    Int       @default(0)
+
+  // Watch time tracking
+  estimatedWatchTimeMinutes Int @default(0)
+  watchTimePoints           Int @default(0)
+
+  // Status flags from YouTube at time of stream
+  wasSponsor      Boolean   @default(false)
+  wasModerator    Boolean   @default(false)
+
+  // Bonuses applied
+  earlyBirdBonus  Boolean   @default(false)
+  fullStreamBonus Boolean   @default(false)
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  stream          Stream    @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  viewer          Viewer    @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+
+  @@unique([streamId, viewerId])
+  @@index([streamId])
+  @@index([viewerId])
+}
+
+// ============================================
+// LOYALTY CODE SYSTEM
+// ============================================
+
+model LoyaltyCode {
+  id                 String     @id @default(cuid())
+  streamId           String
+  code               String
+  codeType           CodeType   @default(STANDARD)
+
+  // Point values
+  basePoints         Int        @default(100)
+  memberBonus        Int        @default(50)
+  modBonus           Int        @default(25)
+  firstResponseBonus Int        @default(50)
+  firstResponseLimit Int        @default(10)
+
+  // Validity window
+  validFrom          DateTime   @default(now())
+  validUntil         DateTime
+  durationSeconds    Int        @default(120)
+
+  // Limits
+  maxRedemptions     Int?
+  currentRedemptions Int        @default(0)
+
+  // Status
+  isActive           Boolean    @default(true)
+  announcedAt        DateTime?
+  announcedInChat    Boolean    @default(false)
+
+  createdAt          DateTime   @default(now())
+
+  // Relations
+  stream             Stream     @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  redemptions        CodeRedemption[]
+
+  @@unique([streamId, code])
+  @@index([streamId])
+  @@index([validUntil])
+  @@index([isActive])
+  @@index([code])
+}
+
+enum CodeType {
+  STANDARD        // Regular periodic code (100 pts, 2 min)
+  FLASH           // Short window, high points (200 pts, 60s)
+  BONUS           // Special occasion
+  FIRST_RESPONSE  // Only first N viewers
+}
+
+model CodeRedemption {
+  id                  String    @id @default(cuid())
+  codeId              String
+  viewerId            String
+
+  // Points awarded
+  pointsAwarded       Int
+  bonusType           String?   // "member", "mod", "first", "member+mod", etc.
+  bonusPoints         Int       @default(0)
+
+  // Anti-fraud data
+  redemptionLatencyMs Int       // Time from code announcement to redemption
+  messageId           String?   // YouTube message ID used
+  trustScoreAtTime    Float     // Viewer's trust score when redeemed
+  flaggedForReview    Boolean   @default(false)
+  flagReason          String?
+
+  redeemedAt          DateTime  @default(now())
+
+  // Relations
+  code                LoyaltyCode @relation(fields: [codeId], references: [id], onDelete: Cascade)
+  viewer              Viewer      @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+
+  @@unique([codeId, viewerId])
+  @@index([codeId])
+  @@index([viewerId])
+  @@index([redeemedAt])
+}
+
+// ============================================
+// POINTS & TRANSACTIONS
+// ============================================
+
+model PointTransaction {
+  id              String            @id @default(cuid())
+  viewerId        String
+  streamId        String?
+
+  // Transaction details
+  type            TransactionType
+  amount          Int
+  balanceBefore   Int
+  balanceAfter    Int
+
+  // Reference
+  referenceType   String?
+  referenceId     String?
+  description     String?
+
+  // Admin adjustments
+  adjustedBy      String?
+
+  createdAt       DateTime          @default(now())
+
+  // Relations
+  viewer          Viewer            @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+  stream          Stream?           @relation(fields: [streamId], references: [id], onDelete: SetNull)
+
+  @@index([viewerId])
+  @@index([streamId])
+  @@index([createdAt])
+  @@index([type])
+}
+
+enum TransactionType {
+  CODE_REDEMPTION
+  CHAT_ACTIVITY
+  ATTENDANCE_BONUS
+  STREAK_BONUS
+  RANK_BONUS
+  WATCH_TIME
+  MANUAL_CREDIT
+  MANUAL_DEBIT
+  REWARD_REDEMPTION
+  FRAUD_REVERSAL
+  REFERRAL_BONUS
+  HOMEWORK_SUBMISSION
+  POLL_PARTICIPATION
+  CTA_BONUS
+  QUALITY_QUESTION
+  HELPFUL_UPVOTE
+  STREAK_MILESTONE
+  COURSE_COMPLETION
+  MODULE_COMPLETION
+  STREAK_PAUSE_COST
+}
+
+// ============================================
+// CHAT MESSAGE TRACKING
+// ============================================
+
+model ChatMessage {
+  id                  String    @id @default(cuid())
+  streamId            String
+  viewerId            String
+  youtubeMessageId    String    @unique
+
+  // Message content
+  messageText         String
+  messageType         String    // "textMessageEvent", "superChatEvent", etc.
+
+  // Timing
+  publishedAt         DateTime
+  processedAt         DateTime  @default(now())
+
+  // YouTube metadata
+  isSuperChat         Boolean   @default(false)
+  superChatAmount     Float?
+  superChatCurrency   String?
+
+  // Code detection
+  containsCode        Boolean   @default(false)
+  detectedCode        String?
+
+  // Anti-fraud analysis
+  similarityHash      String?
+  flaggedAsSuspicious Boolean   @default(false)
+  suspicionReason     String?
+
+  // Relations
+  stream              Stream    @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  viewer              Viewer    @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+
+  @@index([streamId])
+  @@index([viewerId])
+  @@index([publishedAt])
+  @@index([containsCode])
+  @@index([streamId, publishedAt]) // Composite for time-range queries per stream
+}
+
+// ============================================
+// ANTI-FRAUD SYSTEM
+// ============================================
+
+model FraudEvent {
+  id                    String         @id @default(cuid())
+  viewerId              String
+  streamId              String?
+
+  // Event details
+  eventType             FraudEventType
+  severity              FraudSeverity
+  description           String
+  evidence              Json?
+
+  // Impact
+  trustPenaltyApplied   Float
+  wasAutoBanned         Boolean        @default(false)
+
+  // Review
+  reviewStatus          ReviewStatus   @default(PENDING)
+  reviewedAt            DateTime?
+  reviewedBy            String?
+  reviewNotes           String?
+
+  createdAt             DateTime       @default(now())
+
+  // Relations
+  viewer                Viewer         @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+  stream                Stream?        @relation(fields: [streamId], references: [id], onDelete: SetNull)
+
+  @@index([viewerId])
+  @@index([streamId])
+  @@index([createdAt])
+  @@index([severity])
+  @@index([reviewStatus])
+  @@index([viewerId, createdAt]) // Composite for recent fraud events lookup
+  @@index([viewerId, eventType, createdAt]) // Composite for fraud rule threshold checks
+}
+
+enum FraudEventType {
+  INSTANT_RESPONSE
+  RAPID_REDEMPTION
+  IDENTICAL_TIMING
+  PATTERN_DETECTION
+  NEW_ACCOUNT
+  MESSAGE_SPAM
+}
+
+enum FraudSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ReviewStatus {
+  PENDING
+  CONFIRMED
+  FALSE_POSITIVE
+  ESCALATED
+}
+
+// ============================================
+// REWARD SYSTEM
+// ============================================
+
+enum RewardCategory {
+  GATEWAY
+  ENGAGEMENT
+  COMMITMENT
+  PREMIUM
+  PRESTIGE
+  ROTATING
+}
+
+model RewardConfig {
+  id                String    @id @default(cuid())
+  channelId         String
+
+  // Reward details
+  name              String
+  description       String?
+  imageUrl          String?
+
+  // Reward type
+  rewardType        RewardType @default(DIGITAL)
+  requiresShipping  Boolean    @default(false)
+  stockQuantity     Int?
+
+  // Cost in tokens (1000 points = 1 token)
+  tokenCost         Int
+
+  // Limits
+  maxPerViewer      Int?
+  maxTotal          Int?
+  currentTotal      Int       @default(0)
+
+  // Availability
+  isActive          Boolean   @default(true)
+  availableFrom     DateTime?
+  availableUntil    DateTime?
+
+  // Minimum requirements
+  minTrustScore     Float     @default(30)
+  minAccountAgeDays Int       @default(7)
+  minRank           ViewerRank?
+  category                  RewardCategory @default(GATEWAY)
+  funnelPosition            Int            @default(0)
+  externalCourseId          String?
+  externalModuleId          String?
+  isLimitedTime             Boolean        @default(false)
+  limitedTimeEndsAt         DateTime?
+  pointsCost                Int            @default(0)
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  channel           Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  redemptions       RewardRedemption[]
+
+  @@index([channelId])
+  @@index([isActive])
+}
+
+enum RewardType {
+  DIGITAL
+  PHYSICAL
+}
+
+model RewardRedemption {
+  id              String    @id @default(cuid())
+  rewardId        String
+  viewerId        String
+
+  // Redemption details
+  tokensSpent     Int
+  pointsSpent     Int       // tokensSpent * 1000
+
+  // Reward delivery
+  rewardCode      String?   // Generated discount code, etc.
+  deliveryStatus  DeliveryStatus @default(PENDING)
+  deliveredAt     DateTime?
+
+  // Shipping information (for physical rewards)
+  shippingName    String?
+  shippingAddress String?
+  shippingCity    String?
+  shippingState   String?
+  shippingZip     String?
+  shippingCountry String?
+  shippingPhone   String?
+  trackingNumber  String?
+  shippedAt       DateTime?
+
+  // Admin notes
+  adminNotes      String?
+
+  // Audit
+  redeemedAt      DateTime  @default(now())
+
+  // Relations
+  reward          RewardConfig @relation(fields: [rewardId], references: [id], onDelete: Cascade)
+  viewer          Viewer       @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+
+  @@index([rewardId])
+  @@index([viewerId])
+  @@index([redeemedAt])
+  @@index([deliveryStatus])
+}
+
+enum DeliveryStatus {
+  PENDING
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  FAILED
+  CANCELLED
+}
+
+// ============================================
+// SYSTEM & AUDIT
+// ============================================
+
+model AuditLog {
+  id              String    @id @default(cuid())
+  userId          String?
+  entityType      String
+  entityId        String
+  action          String
+  previousValue   Json?
+  newValue        Json?
+  ipAddress       String?
+
+  createdAt       DateTime  @default(now())
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+model QuotaUsageLog {
+  id              String    @id @default(cuid())
+  channelId       String
+  date            DateTime  @db.Date
+
+  // Breakdown
+  liveChatCalls   Int       @default(0)
+  insertCalls     Int       @default(0)
+  otherApiCalls   Int       @default(0)
+  totalUnits      Int       @default(0)
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([channelId, date])
+  @@index([channelId])
+  @@index([date])
+}
+
+// ============================================
+// VIEWER AUTHENTICATION (Portal OAuth)
+// ============================================
+
+model ViewerAccount {
+  id            String   @id @default(cuid())
+  googleId      String   @unique
+  email         String
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  viewers       Viewer[]
+
+  @@index([googleId])
+  @@index([email])
+}
