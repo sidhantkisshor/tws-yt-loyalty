@@ -30,7 +30,9 @@ const VIEWER_SELECT = {
   },
 } as const
 
-async function fetchViewerBatch(cursor: string | undefined) {
+type ViewerBatchResult = Awaited<ReturnType<typeof prisma.viewer.findMany<{ select: typeof VIEWER_SELECT }>>>
+
+async function fetchViewerBatch(cursor: string | undefined): Promise<ViewerBatchResult> {
   return prisma.viewer.findMany({
     take: BATCH_SIZE,
     ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
