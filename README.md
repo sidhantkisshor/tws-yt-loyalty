@@ -1,196 +1,85 @@
-# YT Loyalty - YouTube Livestream Loyalty Program
+# YT Loyalty
 
-A production-ready Next.js application that enables YouTube content creators to run loyalty programs during livestreams, rewarding viewers with redeemable codes and points.
+A cross-channel YouTube loyalty platform. Connect multiple YouTube channels (even with different Google accounts), ingest live chat and comments, score engagement daily, and let fans redeem digital rewards from a single global wallet.
+
+## Architecture
+
+```
+Vercel (control plane)          Shared Infra
+  Admin dashboard                PostgreSQL (Prisma 7)
+  Viewer portal                  Upstash Redis (locks, cache, leaderboards)
+  API routes                     Sentry (errors, tracing)
+  9 cron endpoints
+```
+
+**Key models:** Workspace > Channel > Stream > Viewer, with FanProfile as the global identity and PointLedger as the immutable transaction log.
 
 ## Features
 
-### For Content Creators (Admins)
-- 🔴 **Stream Management**: Create and manage YouTube livestreams
-- 🎁 **Loyalty Codes**: Generate unique codes with customizable point values
-- 📊 **Real-time Analytics**: Track viewer engagement and code redemptions
-- 🛡️ **Fraud Detection**: Automated trust scoring and bot detection
-- 📦 **Reward Management**: Create digital and physical rewards
-- 🎯 **Point System**: Flexible point allocation with member/moderator bonuses
+**Admin** — Channel management, stream control, reward catalog, fulfillment queue, fraud review, ops dashboard with health/alerts/job history.
 
-### For Viewers
-- 💰 **Point Accumulation**: Earn points by redeeming codes during livestreams
-- 🏆 **Rank System**: Progress through ranks (Observer → Operator → Sniper → Architect → Inner Circle)
-- 🎁 **Reward Redemption**: Exchange points for exclusive rewards
-- 📜 **Transaction History**: Track all point earnings and redemptions
-- 🔐 **Secure Authentication**: Google OAuth integration
+**Viewer** — Global wallet across all channels, rank progression (Paper Trader to Whale), reward redemption, transaction history, streak tracking, channel switcher.
 
-### Security Features
-- ✅ Rate limiting on all endpoints
-- ✅ Input validation with Zod
-- ✅ Content Security Policy (CSP) with nonce
-- ✅ Comprehensive security headers
-- ✅ Error message sanitization
-- ✅ Sentry error tracking
-- ✅ Structured logging
-- ✅ Fraud detection system
+**Backend** — Distributed lock coordination, daily scoring settlement, batch anti-cheat (velocity/duplicate/timing/rapid-account), digital fulfillment pipeline, per-channel OAuth with auto-refresh.
 
 ## Tech Stack
 
-- **Framework**: Next.js 15 (App Router)
-- **Authentication**: NextAuth.js with Google OAuth
-- **Database**: PostgreSQL with Prisma ORM
-- **Cache/Rate Limiting**: Redis (Upstash)
-- **Monitoring**: Sentry
-- **Deployment**: Vercel
-- **Language**: TypeScript
-- **Styling**: Tailwind CSS
-- **Testing**: Vitest
-
-## Prerequisites
-
-- Node.js 20+
-- PostgreSQL database (recommended: Neon, Supabase, or Railway)
-- Redis database (Upstash)
-- Google Cloud project with OAuth credentials
-- Sentry account (optional but recommended)
+| Layer | Technology |
+|-------|-----------|
+| Framework | Next.js 15 (App Router) |
+| Language | TypeScript (strict) |
+| Database | PostgreSQL + Prisma 7 (PrismaPg adapter) |
+| Cache | Upstash Redis (REST) |
+| Auth | NextAuth.js (Google OAuth) |
+| Testing | Vitest (356 tests) |
+| Monitoring | Sentry |
+| Deployment | Vercel |
 
 ## Quick Start
 
-### 1. Clone and Install
-
 ```bash
-git clone <your-repo-url>
-cd yt-loyalty
+git clone https://github.com/sidhantkisshor/tws-yt-loyalty.git
+cd tws-yt-loyalty
 npm install
-```
-
-### 2. Environment Setup
-
-Create `.env.local` file:
-
-```env
-# Database (PostgreSQL with connection pooling)
-DATABASE_URL="postgresql://user:password@host/database?sslmode=require&pgbouncer=true"
-
-# NextAuth.js
-NEXTAUTH_URL="http://localhost:3000"
-NEXTAUTH_SECRET="your-secret-here"  # Generate: openssl rand -base64 32
-
-# Google OAuth
-GOOGLE_CLIENT_ID="your-client-id.apps.googleusercontent.com"
-GOOGLE_CLIENT_SECRET="your-client-secret"
-
-# Redis (Upstash)
-UPSTASH_REDIS_REST_URL="https://your-redis.upstash.io"
-UPSTASH_REDIS_REST_TOKEN="your-token"
-
-# Sentry (Optional)
-SENTRY_DSN="https://key@org.ingest.sentry.io/project"
-NEXT_PUBLIC_SENTRY_DSN="https://key@org.ingest.sentry.io/project"
-```
-
-### 3. Database Setup
-
-```bash
-# Generate Prisma client
-npm run db:generate
-
-# Run migrations
+cp .env.example .env.local   # fill in real values
+npx prisma generate
 npx prisma migrate dev
-
-# (Optional) Open Prisma Studio
-npm run db:studio
-```
-
-### 4. Run Development Server
-
-```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000)
+See [`.env.example`](.env.example) for all required variables.
 
-## Project Structure
+## Cron Schedule
 
-```
-yt-loyalty/
-├── src/
-│   ├── app/                 # Next.js App Router pages
-│   │   ├── admin/          # Admin dashboard
-│   │   ├── viewer/         # Viewer interface
-│   │   └── api/            # API routes
-│   ├── components/         # React components
-│   ├── lib/                # Utilities and configurations
-│   │   ├── auth.ts         # NextAuth configuration
-│   │   ├── prisma.ts       # Database client
-│   │   ├── redis.ts        # Redis client
-│   │   ├── rateLimits.ts   # Rate limiting
-│   │   ├── validators.ts   # Input validation
-│   │   ├── logger.ts       # Structured logging
-│   │   └── env.ts          # Environment validation
-│   ├── services/           # Business logic
-│   │   ├── fraudDetection.ts
-│   │   └── messageProcessor.ts
-│   └── middleware.ts       # CSP and security middleware
-├── prisma/
-│   └── schema.prisma       # Database schema
-├── scripts/                # Deployment and utility scripts
-└── __tests__/             # Test suites
-```
-
-## Deployment
-
-See [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) for comprehensive deployment instructions.
-
-### Quick Deploy to Vercel
-
-```bash
-# Install Vercel CLI
-npm install -g vercel
-
-# Configure environment variables
-npm run deploy:setup
-
-# Deploy
-npm run deploy
-```
+| Endpoint | Schedule | Purpose |
+|----------|----------|---------|
+| `poll-streams` | Every 3 min | Live chat ingestion |
+| `ingest-comments` | Every 15 min | Video comment ingestion |
+| `fulfill-rewards` | Every 5 min | Digital reward delivery |
+| `token-health` | Hourly | OAuth token monitoring |
+| `discover-videos` | Every 4 hrs | New video discovery |
+| `update-segments` | Every 6 hrs | Fan segmentation |
+| `daily-scoring` | 2 AM UTC | Point settlement |
+| `fraud-scan` | 3 AM UTC | Fraud review + enforcement |
+| `tier-decay` | Midnight UTC | Rank decay |
 
 ## Testing
 
 ```bash
-# Run all tests
-npm test
-
-# Type checking
-npm run typecheck
-
-# Linting
-npm run lint
+npm test              # run all tests
+npx tsc --noEmit      # type check
+npx next build        # production build
 ```
-
-See [TESTING_GUIDE.md](TESTING_GUIDE.md) for detailed testing documentation.
-
-## Security
-
-This application has been hardened for production with comprehensive security measures.
-
-See [SECURITY_AUDIT_CHECKLIST.md](SECURITY_AUDIT_CHECKLIST.md) for the complete security checklist.
 
 ## Documentation
 
-- [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) - Production deployment
-- [SECURITY_AUDIT_CHECKLIST.md](SECURITY_AUDIT_CHECKLIST.md) - Security checklist
-- [SENTRY_ALERTS_GUIDE.md](SENTRY_ALERTS_GUIDE.md) - Monitoring setup
-- [TESTING_GUIDE.md](TESTING_GUIDE.md) - Testing procedures
-- [PRODUCTION_HARDENING_PROGRESS.md](PRODUCTION_HARDENING_PROGRESS.md) - Hardening status
-- [KNOWN_ISSUES.md](KNOWN_ISSUES.md) - Known issues and workarounds
-
-## Learn More
-
-To learn more about Next.js:
-
-- [Next.js Documentation](https://nextjs.org/docs)
-- [Learn Next.js](https://nextjs.org/learn)
+- [Architecture](docs/ARCHITECTURE.md)
+- [API Reference](docs/API_REFERENCE.md)
+- [Database Schema](docs/DATABASE_SCHEMA.md)
+- [Services](docs/SERVICES.md)
+- [Auth & Security](docs/AUTH_AND_SECURITY.md)
+- [Setup & Deployment](docs/SETUP_AND_DEPLOYMENT.md)
 
 ## License
 
-This project is proprietary. All rights reserved.
-
----
-
-**Built with Next.js and TypeScript** | **Production Ready** | **Secure** | **Scalable**
+Proprietary. All rights reserved.
