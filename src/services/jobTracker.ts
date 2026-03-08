@@ -1,6 +1,6 @@
 import prisma from '@/lib/prisma'
 import { logger } from '@/lib/logger'
-import type { JobType, JobStatus } from '@prisma/client'
+import type { JobType, JobStatus, Prisma } from '@prisma/client'
 
 export interface JobContext {
   jobRunId: string
@@ -11,7 +11,7 @@ export interface JobContext {
 export async function startJob(
   jobType: JobType,
   channelId?: string,
-  metadata?: Record<string, unknown>
+  metadata?: Prisma.InputJsonValue
 ): Promise<JobContext> {
   const jobRun = await prisma.jobRun.create({
     data: {
@@ -19,7 +19,7 @@ export async function startJob(
       status: 'RUNNING',
       channelId: channelId ?? null,
       startedAt: new Date(),
-      metadata: metadata ?? null,
+      metadata: metadata ?? undefined,
     },
   })
 
