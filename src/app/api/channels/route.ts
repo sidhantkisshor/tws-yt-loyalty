@@ -120,13 +120,22 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Create channel
+    // Create channel with its ChannelCredential
     const channel = await prisma.channel.create({
       data: {
         youtubeChannelId: channelInfo.id,
         title: channelInfo.title,
         thumbnailUrl: channelInfo.thumbnailUrl,
         ownerId: session.user.id,
+        channelCredential: {
+          create: {
+            googleAccountEmail: session.user.email ?? '',
+            accessToken: account.access_token,
+            refreshToken: account.refresh_token,
+            tokenExpiresAt: account.expires_at ? new Date(account.expires_at * 1000) : null,
+            tokenStatus: 'VALID',
+          },
+        },
       },
     })
 

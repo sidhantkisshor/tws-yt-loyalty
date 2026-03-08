@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, type ViewerRank } from '@prisma/client'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { Pool } from 'pg'
 import { config } from 'dotenv'
@@ -76,7 +76,7 @@ async function main() {
       where: { id: fp.id },
       data: {
         ...points,
-        rank: rank as any,
+        rank: rank as ViewerRank,
         trustScore: trust,
         currentStreak: maxStreak,
         longestStreak: maxLongest,
