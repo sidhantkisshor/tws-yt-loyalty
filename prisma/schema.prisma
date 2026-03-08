@@ -475,6 +475,7 @@ enum TransactionType {
   COURSE_COMPLETION
   MODULE_COMPLETION
   STREAK_PAUSE_COST
+  SUPER_CHAT_BONUS
 }
 
 // ============================================
