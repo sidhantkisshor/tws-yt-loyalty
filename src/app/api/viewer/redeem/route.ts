@@ -7,6 +7,7 @@ import { rewardRedemptionLimiter } from '@/lib/redis'
 import { redeemRewardSchema } from '@/lib/validators'
 import { z } from 'zod'
 import { logger } from '@/lib/logger'
+import { fulfillRedemption } from '@/services/fulfillment'
 
 // Redeem a reward (viewer-authenticated version with shipping support)
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -293,15 +294,30 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       isolationLevel: 'Serializable', // Prevents race conditions
     })
 
+    // Attempt immediate digital fulfillment (non-blocking for the response)
+    let fulfillment = null
+    if (reward.rewardType === 'DIGITAL') {
+      try {
+        fulfillment = await fulfillRedemption(redemption.id)
+      } catch (fulfillError) {
+        // Log but don't fail the redemption - cron will retry
+        logger.warn('Immediate fulfillment failed, cron will retry', {
+          redemptionId: redemption.id,
+          error: fulfillError instanceof Error ? fulfillError.message : 'Unknown',
+        })
+      }
+    }
+
     return NextResponse.json({
       success: true,
       redemption: {
         id: redemption.id,
-        rewardCode,
+        rewardCode: fulfillment?.deliveryCode ?? rewardCode,
         pointsSpent: pointsNeeded,
         tokensSpent: reward.tokenCost,
         rewardName: reward.name,
         rewardType: reward.rewardType,
+        deliveryStatus: fulfillment?.success ? 'DELIVERED' : 'PENDING',
       },
     })
   } catch (error) {
