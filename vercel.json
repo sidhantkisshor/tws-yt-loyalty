@@ -18,12 +18,54 @@
     },
     "src/app/api/cron/update-segments/route.ts": {
       "maxDuration": 300
+    },
+    "src/app/api/cron/daily-scoring/route.ts": {
+      "maxDuration": 600
+    },
+    "src/app/api/cron/fraud-scan/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/cron/ingest-comments/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/cron/discover-videos/route.ts": {
+      "maxDuration": 120
+    },
+    "src/app/api/cron/fulfill-rewards/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/cron/token-health/route.ts": {
+      "maxDuration": 60
     }
   },
   "crons": [
     {
       "path": "/api/cron/poll-streams",
       "schedule": "*/3 * * * *"
+    },
+    {
+      "path": "/api/cron/ingest-comments",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/discover-videos",
+      "schedule": "0 */4 * * *"
+    },
+    {
+      "path": "/api/cron/daily-scoring",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/fraud-scan",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/fulfill-rewards",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/token-health",
+      "schedule": "0 */1 * * *"
     },
     {
       "path": "/api/cron/tier-decay",
@@ -54,18 +96,7 @@
       ]
     }
   ],
-  "redirects": [
-    {
-      "source": "/admin",
-      "destination": "/admin/page",
-      "permanent": false
-    },
-    {
-      "source": "/viewer",
-      "destination": "/viewer/page",
-      "permanent": false
-    }
-  ],
+  "redirects": [],
   "env": {
     "NODE_ENV": "production"
   }
