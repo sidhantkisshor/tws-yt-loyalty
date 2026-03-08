@@ -31,18 +31,50 @@ const RANK_LABELS: Record<string, string> = {
   WHALE: 'Whale',
 }
 
+interface GlobalWallet {
+  totalPoints: number
+  availablePoints: number
+  lifetimePoints: number
+  rank: string
+  trustScore: number
+  currentStreak: number
+  longestStreak: number
+}
+
 export default function ViewerRewardsPage() {
-  const { currentViewerProfile } = useViewer()
+  const { currentViewerProfile, activeChannelId } = useViewer()
   const [rewards, setRewards] = useState<Reward[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'DIGITAL' | 'PHYSICAL'>('all')
   const [hoveredCard, setHoveredCard] = useState<string | null>(null)
+  const [globalWallet, setGlobalWallet] = useState<GlobalWallet | null>(null)
 
-  const viewerTokens = currentViewerProfile
-    ? Math.floor(currentViewerProfile.availablePoints / 1000)
-    : 0
+  // Fetch global wallet data from /api/viewer/me
+  const fetchGlobalWallet = useCallback(async () => {
+    if (!activeChannelId) return
+    try {
+      const res = await fetch(`/api/viewer/me?channelId=${activeChannelId}`)
+      if (res.ok) {
+        const data = await res.json()
+        if (data.globalWallet) {
+          setGlobalWallet(data.globalWallet)
+        }
+      }
+    } catch {
+      // Silently fail - will use channel-local fallback
+    }
+  }, [activeChannelId])
 
-  const viewerRank = currentViewerProfile?.rank || 'PAPER_TRADER'
+  useEffect(() => {
+    fetchGlobalWallet()
+  }, [fetchGlobalWallet])
+
+  // Use global wallet for tokens when available, otherwise channel-local
+  const globalAvailable = globalWallet?.availablePoints
+  const localAvailable = currentViewerProfile?.availablePoints ?? 0
+  const viewerTokens = Math.floor((globalAvailable ?? localAvailable) / 1000)
+
+  const viewerRank = globalWallet?.rank ?? currentViewerProfile?.rank ?? 'PAPER_TRADER'
   const viewerRankIndex = RANK_ORDER.indexOf(viewerRank)
 
   const fetchRewards = useCallback(async () => {

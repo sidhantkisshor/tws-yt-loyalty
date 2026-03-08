@@ -9,6 +9,16 @@ interface ChannelOption {
   viewerId: string
 }
 
+interface GlobalWallet {
+  totalPoints: number
+  availablePoints: number
+  lifetimePoints: number
+  rank: string
+  trustScore: number
+  currentStreak: number
+  longestStreak: number
+}
+
 interface ViewerProfile {
   id: string
   displayName: string
@@ -34,6 +44,7 @@ interface ViewerContextType {
   setActiveChannelId: (id: string) => void
   availableChannels: ChannelOption[]
   currentViewerProfile: ViewerProfile | null
+  globalWallet: GlobalWallet | null
   loading: boolean
   refreshProfile?: () => void
 }
@@ -53,6 +64,7 @@ function ViewerContextWrapper({ children }: { children: React.ReactNode }) {
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null)
   const [availableChannels, setAvailableChannels] = useState<ChannelOption[]>([])
   const [currentViewerProfile, setCurrentViewerProfile] = useState<ViewerProfile | null>(null)
+  const [globalWallet, setGlobalWallet] = useState<GlobalWallet | null>(null)
   const [loading, setLoading] = useState(false)
 
   // Initialize active channel from session
@@ -94,6 +106,9 @@ function ViewerContextWrapper({ children }: { children: React.ReactNode }) {
       if (data.viewer) {
         setCurrentViewerProfile(data.viewer)
       }
+      if (data.globalWallet) {
+        setGlobalWallet(data.globalWallet)
+      }
     } catch (err) {
       console.error('Failed to fetch profile', err)
     } finally {
@@ -111,6 +126,7 @@ function ViewerContextWrapper({ children }: { children: React.ReactNode }) {
       setActiveChannelId,
       availableChannels,
       currentViewerProfile,
+      globalWallet,
       loading,
       refreshProfile: fetchProfile,
     }}>

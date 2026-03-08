@@ -76,9 +76,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       }
     }
 
-    // 3. Fetch viewer
+    // 3. Fetch viewer with FanProfile
     const viewer = await prisma.viewer.findUnique({
       where: { id: targetViewerId },
+      include: {
+        fanProfile: {
+          select: {
+            id: true,
+            availablePoints: true,
+            totalPoints: true,
+            rank: true,
+            trustScore: true,
+          },
+        },
+      },
     })
 
     if (!viewer) {
@@ -108,8 +119,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       )
     }
 
-    // Check trust score
-    if (viewer.trustScore < reward.minTrustScore) {
+    // Use global trust score from FanProfile when available
+    const effectiveTrustScore = viewer.fanProfile?.trustScore ?? viewer.trustScore
+    if (effectiveTrustScore < reward.minTrustScore) {
       return NextResponse.json(
         { error: 'Trust score too low for this reward' },
         { status: 400 }
@@ -127,10 +139,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       )
     }
 
-    // Check minimum rank
+    // Check minimum rank using global rank from FanProfile
+    const effectiveRank = viewer.fanProfile?.rank ?? viewer.rank
     if (reward.minRank) {
       const rankOrder = ['PAPER_TRADER', 'RETAIL_TRADER', 'SWING_TRADER', 'FUND_MANAGER', 'MARKET_MAKER', 'HEDGE_FUND', 'WHALE']
-      const viewerRankIndex = rankOrder.indexOf(viewer.rank)
+      const viewerRankIndex = rankOrder.indexOf(effectiveRank)
       const requiredRankIndex = rankOrder.indexOf(reward.minRank)
       if (viewerRankIndex < requiredRankIndex) {
         return NextResponse.json(
@@ -140,9 +153,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       }
     }
 
-    // Calculate points needed
+    // Calculate points needed - check against global FanProfile wallet
     const pointsNeeded = reward.tokenCost * 1000
-    if (viewer.availablePoints < pointsNeeded) {
+    const globalAvailable = viewer.fanProfile?.availablePoints ?? viewer.availablePoints
+    if (globalAvailable < pointsNeeded) {
       return NextResponse.json(
         { error: 'Not enough points' },
         { status: 400 }
@@ -186,13 +200,28 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         }
       }
 
-      // Re-check viewer points inside transaction
-      const freshViewer = await tx.viewer.findUnique({
-        where: { id: viewer.id },
-        select: { availablePoints: true },
-      })
-      if (!freshViewer || freshViewer.availablePoints < pointsNeeded) {
-        throw new Error('INSUFFICIENT_POINTS')
+      // Re-check points inside transaction - use FanProfile when available
+      const fanProfileId = viewer.fanProfileId
+      let balanceBefore: number
+
+      if (fanProfileId) {
+        const freshFanProfile = await tx.fanProfile.findUnique({
+          where: { id: fanProfileId },
+          select: { availablePoints: true },
+        })
+        if (!freshFanProfile || freshFanProfile.availablePoints < pointsNeeded) {
+          throw new Error('INSUFFICIENT_POINTS')
+        }
+        balanceBefore = freshFanProfile.availablePoints
+      } else {
+        const freshViewer = await tx.viewer.findUnique({
+          where: { id: viewer.id },
+          select: { availablePoints: true },
+        })
+        if (!freshViewer || freshViewer.availablePoints < pointsNeeded) {
+          throw new Error('INSUFFICIENT_POINTS')
+        }
+        balanceBefore = freshViewer.availablePoints
       }
 
       // Create redemption
@@ -215,22 +244,33 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         },
       })
 
-      // Deduct points
-      await tx.viewer.update({
-        where: { id: viewer.id },
-        data: {
-          availablePoints: { decrement: pointsNeeded },
-        },
-      })
+      // Deduct points from FanProfile (global wallet) when available
+      if (fanProfileId) {
+        await tx.fanProfile.update({
+          where: { id: fanProfileId },
+          data: {
+            availablePoints: { decrement: pointsNeeded },
+          },
+        })
+      } else {
+        // Fallback: deduct from channel-local Viewer
+        await tx.viewer.update({
+          where: { id: viewer.id },
+          data: {
+            availablePoints: { decrement: pointsNeeded },
+          },
+        })
+      }
 
-      // Create transaction record
+      // Create transaction record linked to both FanProfile and Viewer
       await tx.pointLedger.create({
         data: {
+          fanProfileId: fanProfileId || undefined,
           viewerId: viewer.id,
           type: 'REWARD_REDEMPTION',
           amount: -pointsNeeded,
-          balanceBefore: freshViewer.availablePoints,
-          balanceAfter: freshViewer.availablePoints - pointsNeeded,
+          balanceBefore,
+          balanceAfter: balanceBefore - pointsNeeded,
           referenceType: 'reward_redemption',
           referenceId: rewardId,
           description: `Redeemed: ${reward.name}`,
