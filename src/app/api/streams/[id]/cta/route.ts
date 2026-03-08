@@ -95,7 +95,7 @@ export async function POST(
           },
         })
 
-        await tx.pointTransaction.create({
+        await tx.pointLedger.create({
           data: {
             viewerId: attendance.viewerId,
             streamId,

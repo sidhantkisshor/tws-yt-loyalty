@@ -6,9 +6,7 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
 }
 
 // ============================================
@@ -16,25 +14,22 @@ datasource db {
 // ============================================
 
 model User {
-  id                 String    @id @default(cuid())
-  email              String    @unique
-  name               String?
-  image              String?
-  emailVerified      DateTime?
-  role               UserRole  @default(STREAMER)
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  image         String?
+  emailVerified DateTime?
+  role          UserRole  @default(STREAMER)
 
-  // OAuth tokens for YouTube API
-  googleAccessToken  String?
-  googleRefreshToken String?
-  googleTokenExpiry  DateTime?
-
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  channels           Channel[]
-  accounts           Account[]
-  sessions           Session[]
+  channels         Channel[]
+  accounts         Account[]
+  sessions         Session[]
+  workspaces       Workspace[]
+  workspaceMembers WorkspaceMember[]
 
   @@index([email])
 }
@@ -88,32 +83,38 @@ enum UserRole {
 // ============================================
 
 model Channel {
-  id                 String    @id @default(cuid())
-  youtubeChannelId   String    @unique
-  title              String
-  thumbnailUrl       String?
-  ownerId            String
-  isActive           Boolean   @default(true)
+  id               String  @id @default(cuid())
+  youtubeChannelId String  @unique
+  title            String
+  thumbnailUrl     String?
+  ownerId          String
+  isActive         Boolean @default(true)
 
   // Quota management
-  dailyQuotaUsed     Int       @default(0)
-  dailyQuotaResetAt  DateTime  @default(now())
-  quotaLimit         Int       @default(10000)
+  dailyQuotaUsed    Int      @default(0)
+  dailyQuotaResetAt DateTime @default(now())
+  quotaLimit        Int      @default(10000)
 
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  owner              User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  streams            Stream[]
-  viewers            Viewer[]
-  rewardConfigs      RewardConfig[]
-  referrals             Referral[]
-  homeworkSubmissions    HomeworkSubmission[]
-  webhookConfigs        WebhookConfig[]
+  owner               User                 @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  streams             Stream[]
+  viewers             Viewer[]
+  rewardConfigs       RewardConfig[]
+  referrals           Referral[]
+  homeworkSubmissions HomeworkSubmission[]
+  webhookConfigs      WebhookConfig[]
+  workspaceId         String?
+  workspace           Workspace?           @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  channelCredential   ChannelCredential?
+  engagementEvents    EngagementEvent[]
+  jobRuns             JobRun[]
 
   @@index([ownerId])
   @@index([youtubeChannelId])
+  @@index([workspaceId])
 }
 
 // ============================================
@@ -121,99 +122,99 @@ model Channel {
 // ============================================
 
 model Viewer {
-  id                  String    @id @default(cuid())
-  youtubeChannelId    String    // Their YouTube channel ID from chat
-  displayName         String
-  profileImageUrl     String?
-  channelId           String    // Which streamer channel they belong to
+  id               String  @id @default(cuid())
+  youtubeChannelId String // Their YouTube channel ID from chat
+  displayName      String
+  profileImageUrl  String?
+  channelId        String // Which streamer channel they belong to
 
   // Points & Status
-  totalPoints         Int       @default(0)
-  availablePoints     Int       @default(0)
-  lifetimePoints      Int       @default(0)
+  totalPoints     Int @default(0)
+  availablePoints Int @default(0)
+  lifetimePoints  Int @default(0)
 
   // Rank
-  rank                ViewerRank @default(PAPER_TRADER)
+  rank ViewerRank @default(PAPER_TRADER)
 
   // Trust & Anti-Fraud
-  trustScore          Float     @default(50.0)
-  isBanned            Boolean   @default(false)
-  banReason           String?
-  bannedAt            DateTime?
-  bannedBy            String?
+  trustScore Float     @default(50.0)
+  isBanned   Boolean   @default(false)
+  banReason  String?
+  bannedAt   DateTime?
+  bannedBy   String?
 
   // Engagement Metrics
-  firstSeenAt         DateTime  @default(now())
-  lastSeenAt          DateTime  @default(now())
+  firstSeenAt          DateTime @default(now())
+  lastSeenAt           DateTime @default(now())
   totalStreamsAttended Int      @default(0)
-  totalMessagesCount  Int       @default(0)
-  totalCodesRedeemed  Int       @default(0)
-  currentStreak       Int       @default(0)
-  longestStreak       Int       @default(0)
-  lastStreamAttended  String?
+  totalMessagesCount   Int      @default(0)
+  totalCodesRedeemed   Int      @default(0)
+  currentStreak        Int      @default(0)
+  longestStreak        Int      @default(0)
+  lastStreamAttended   String?
 
   // YouTube status flags
-  isMember            Boolean   @default(false)
-  isModerator         Boolean   @default(false)
+  isMember    Boolean @default(false)
+  isModerator Boolean @default(false)
 
   // Watch time tracking
-  totalWatchTimeMinutes Int     @default(0)
+  totalWatchTimeMinutes Int @default(0)
 
   // Prestige tier fields
-  hasPurchasedCourse        Boolean   @default(false)
-  hasPurchasedPremiumCohort Boolean   @default(false)
-  courseCompleted            Boolean   @default(false)
-  premiumCohortCompleted    Boolean   @default(false)
+  hasPurchasedCourse        Boolean @default(false)
+  hasPurchasedPremiumCohort Boolean @default(false)
+  courseCompleted           Boolean @default(false)
+  premiumCohortCompleted    Boolean @default(false)
   purchasedCourseId         String?
   purchasedCohortId         String?
 
   // Community contribution
-  helpfulUpvotesReceived    Int       @default(0)
-  helpfulUpvotesGiven       Int       @default(0)
-  qualityQuestionsCount     Int       @default(0)
-  homeworkSubmissions        Int       @default(0)
+  helpfulUpvotesReceived Int @default(0)
+  helpfulUpvotesGiven    Int @default(0)
+  qualityQuestionsCount  Int @default(0)
+  homeworkSubmissions    Int @default(0)
 
   // Referral tracking
-  referralCode              String?   @unique
-  referredById              String?
+  referralCode String? @unique
+  referredById String?
 
   // Streak pause
-  activePauseType           String?
-  pauseStartedAt            DateTime?
-  pauseEndsAt               DateTime?
-  shortPausesUsedThisMonth  Int       @default(0)
-  longPausesUsedThisMonth   Int       @default(0)
-  lastPauseResetMonth       Int?
+  activePauseType          String?
+  pauseStartedAt           DateTime?
+  pauseEndsAt              DateTime?
+  shortPausesUsedThisMonth Int       @default(0)
+  longPausesUsedThisMonth  Int       @default(0)
+  lastPauseResetMonth      Int?
 
   // Segment
-  currentSegment            String?
-  segmentUpdatedAt          DateTime?
+  currentSegment   String?
+  segmentUpdatedAt DateTime?
 
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  channel             Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  pointTransactions   PointTransaction[]
-  codeRedemptions     CodeRedemption[]
-  chatMessages        ChatMessage[]
-  streamAttendances   StreamAttendance[]
-  fraudEvents         FraudEvent[]
-  rewardRedemptions   RewardRedemption[]
-  referralsMade         Referral[]          @relation("ReferralsMade")
-  referralsReceived     Referral[]          @relation("ReferralsReceived")
-  pollResponses         PollResponse[]
-  homeworkSubmitted     HomeworkSubmission[]
-  upvotesGiven          HelpfulUpvote[]     @relation("UpvotesGiven")
-  upvotesReceived       HelpfulUpvote[]     @relation("UpvotesReceived")
-  streakPauses          StreakPause[]
-  referredBy            Viewer?             @relation("ViewerReferrals", fields: [referredById], references: [id])
-  referredViewers       Viewer[]            @relation("ViewerReferrals")
-  viewerAccountId     String?
-  viewerAccount       ViewerAccount? @relation(fields: [viewerAccountId], references: [id])
+  channel           Channel              @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  pointLedger       PointLedger[]
+  codeRedemptions   CodeRedemption[]
+  chatMessages      ChatMessage[]
+  streamAttendances StreamAttendance[]
+  fraudEvents       FraudEvent[]
+  rewardRedemptions RewardRedemption[]
+  referralsMade     Referral[]           @relation("ReferralsMade")
+  referralsReceived Referral[]           @relation("ReferralsReceived")
+  pollResponses     PollResponse[]
+  homeworkSubmitted HomeworkSubmission[]
+  upvotesGiven      HelpfulUpvote[]      @relation("UpvotesGiven")
+  upvotesReceived   HelpfulUpvote[]      @relation("UpvotesReceived")
+  streakPauses      StreakPause[]
+  referredBy        Viewer?              @relation("ViewerReferrals", fields: [referredById], references: [id])
+  referredViewers   Viewer[]             @relation("ViewerReferrals")
+  fanProfileId      String?
+  fanProfile        FanProfile?          @relation(fields: [fanProfileId], references: [id])
 
   @@unique([youtubeChannelId, channelId])
-  @@index([viewerAccountId])
+  @@index([fanProfileId])
   @@index([channelId])
   @@index([youtubeChannelId])
   @@index([trustScore])
@@ -240,49 +241,50 @@ enum ViewerRank {
 // ============================================
 
 model Stream {
-  id                     String       @id @default(cuid())
-  channelId              String
-  youtubeVideoId         String
-  youtubeLiveChatId      String?
-  title                  String
-  thumbnailUrl           String?
-  status                 StreamStatus @default(SCHEDULED)
+  id                String       @id @default(cuid())
+  channelId         String
+  youtubeVideoId    String
+  youtubeLiveChatId String?
+  title             String
+  thumbnailUrl      String?
+  status            StreamStatus @default(SCHEDULED)
 
   // Timing
-  scheduledStartAt       DateTime?
-  actualStartAt          DateTime?
-  endedAt                DateTime?
+  scheduledStartAt DateTime?
+  actualStartAt    DateTime?
+  endedAt          DateTime?
 
   // Polling state
-  isPollingActive        Boolean      @default(false)
-  lastPollAt             DateTime?
-  pollIntervalMs         Int          @default(4000)
-  nextPageToken          String?
-  quotaUsedThisStream    Int          @default(0)
+  isPollingActive     Boolean   @default(false)
+  lastPollAt          DateTime?
+  pollIntervalMs      Int       @default(4000)
+  nextPageToken       String?
+  quotaUsedThisStream Int       @default(0)
 
   // CTA tracking
-  ctaTimestamp              DateTime?
-  ctaPointsAwarded          Boolean   @default(false)
+  ctaTimestamp     DateTime?
+  ctaPointsAwarded Boolean   @default(false)
 
   // Stats
-  peakConcurrentChatters Int          @default(0)
-  totalUniqueChatters    Int          @default(0)
-  totalMessagesProcessed Int          @default(0)
-  totalCodesGenerated    Int          @default(0)
-  totalPointsAwarded     Int          @default(0)
+  peakConcurrentChatters Int @default(0)
+  totalUniqueChatters    Int @default(0)
+  totalMessagesProcessed Int @default(0)
+  totalCodesGenerated    Int @default(0)
+  totalPointsAwarded     Int @default(0)
 
-  createdAt              DateTime     @default(now())
-  updatedAt              DateTime     @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  channel                Channel      @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  loyaltyCodes           LoyaltyCode[]
-  chatMessages           ChatMessage[]
-  streamAttendances      StreamAttendance[]
-  pointTransactions      PointTransaction[]
-  fraudEvents            FraudEvent[]
-  polls                  StreamPoll[]
-  helpfulUpvotes         HelpfulUpvote[]
+  channel           Channel            @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  loyaltyCodes      LoyaltyCode[]
+  chatMessages      ChatMessage[]
+  streamAttendances StreamAttendance[]
+  pointLedger       PointLedger[]
+  fraudEvents       FraudEvent[]
+  polls             StreamPoll[]
+  helpfulUpvotes    HelpfulUpvote[]
+  engagementEvents  EngagementEvent[]
 
   @@unique([youtubeVideoId])
   @@index([channelId])
@@ -298,35 +300,35 @@ enum StreamStatus {
 }
 
 model StreamAttendance {
-  id              String    @id @default(cuid())
-  streamId        String
-  viewerId        String
+  id       String @id @default(cuid())
+  streamId String
+  viewerId String
 
   // Attendance tracking
-  firstMessageAt  DateTime
-  lastMessageAt   DateTime
-  messageCount    Int       @default(0)
-  codesRedeemed   Int       @default(0)
-  pointsEarned    Int       @default(0)
+  firstMessageAt DateTime
+  lastMessageAt  DateTime
+  messageCount   Int      @default(0)
+  codesRedeemed  Int      @default(0)
+  pointsEarned   Int      @default(0)
 
   // Watch time tracking
   estimatedWatchTimeMinutes Int @default(0)
   watchTimePoints           Int @default(0)
 
   // Status flags from YouTube at time of stream
-  wasSponsor      Boolean   @default(false)
-  wasModerator    Boolean   @default(false)
+  wasSponsor   Boolean @default(false)
+  wasModerator Boolean @default(false)
 
   // Bonuses applied
-  earlyBirdBonus  Boolean   @default(false)
-  fullStreamBonus Boolean   @default(false)
+  earlyBirdBonus  Boolean @default(false)
+  fullStreamBonus Boolean @default(false)
 
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  stream          Stream    @relation(fields: [streamId], references: [id], onDelete: Cascade)
-  viewer          Viewer    @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+  stream Stream @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  viewer Viewer @relation(fields: [viewerId], references: [id], onDelete: Cascade)
 
   @@unique([streamId, viewerId])
   @@index([streamId])
@@ -338,37 +340,37 @@ model StreamAttendance {
 // ============================================
 
 model LoyaltyCode {
-  id                 String     @id @default(cuid())
-  streamId           String
-  code               String
-  codeType           CodeType   @default(STANDARD)
+  id       String   @id @default(cuid())
+  streamId String
+  code     String
+  codeType CodeType @default(STANDARD)
 
   // Point values
-  basePoints         Int        @default(100)
-  memberBonus        Int        @default(50)
-  modBonus           Int        @default(25)
-  firstResponseBonus Int        @default(50)
-  firstResponseLimit Int        @default(10)
+  basePoints         Int @default(100)
+  memberBonus        Int @default(50)
+  modBonus           Int @default(25)
+  firstResponseBonus Int @default(50)
+  firstResponseLimit Int @default(10)
 
   // Validity window
-  validFrom          DateTime   @default(now())
-  validUntil         DateTime
-  durationSeconds    Int        @default(120)
+  validFrom       DateTime @default(now())
+  validUntil      DateTime
+  durationSeconds Int      @default(120)
 
   // Limits
   maxRedemptions     Int?
-  currentRedemptions Int        @default(0)
+  currentRedemptions Int  @default(0)
 
   // Status
-  isActive           Boolean    @default(true)
-  announcedAt        DateTime?
-  announcedInChat    Boolean    @default(false)
+  isActive        Boolean   @default(true)
+  announcedAt     DateTime?
+  announcedInChat Boolean   @default(false)
 
-  createdAt          DateTime   @default(now())
+  createdAt DateTime @default(now())
 
   // Relations
-  stream             Stream     @relation(fields: [streamId], references: [id], onDelete: Cascade)
-  redemptions        CodeRedemption[]
+  stream      Stream           @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  redemptions CodeRedemption[]
 
   @@unique([streamId, code])
   @@index([streamId])
@@ -378,34 +380,34 @@ model LoyaltyCode {
 }
 
 enum CodeType {
-  STANDARD        // Regular periodic code (100 pts, 2 min)
-  FLASH           // Short window, high points (200 pts, 60s)
-  BONUS           // Special occasion
-  FIRST_RESPONSE  // Only first N viewers
+  STANDARD // Regular periodic code (100 pts, 2 min)
+  FLASH // Short window, high points (200 pts, 60s)
+  BONUS // Special occasion
+  FIRST_RESPONSE // Only first N viewers
 }
 
 model CodeRedemption {
-  id                  String    @id @default(cuid())
-  codeId              String
-  viewerId            String
+  id       String @id @default(cuid())
+  codeId   String
+  viewerId String
 
   // Points awarded
-  pointsAwarded       Int
-  bonusType           String?   // "member", "mod", "first", "member+mod", etc.
-  bonusPoints         Int       @default(0)
+  pointsAwarded Int
+  bonusType     String? // "member", "mod", "first", "member+mod", etc.
+  bonusPoints   Int     @default(0)
 
   // Anti-fraud data
-  redemptionLatencyMs Int       // Time from code announcement to redemption
-  messageId           String?   // YouTube message ID used
-  trustScoreAtTime    Float     // Viewer's trust score when redeemed
-  flaggedForReview    Boolean   @default(false)
+  redemptionLatencyMs Int // Time from code announcement to redemption
+  messageId           String? // YouTube message ID used
+  trustScoreAtTime    Float // Viewer's trust score when redeemed
+  flaggedForReview    Boolean @default(false)
   flagReason          String?
 
-  redeemedAt          DateTime  @default(now())
+  redeemedAt DateTime @default(now())
 
   // Relations
-  code                LoyaltyCode @relation(fields: [codeId], references: [id], onDelete: Cascade)
-  viewer              Viewer      @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+  code   LoyaltyCode @relation(fields: [codeId], references: [id], onDelete: Cascade)
+  viewer Viewer      @relation(fields: [viewerId], references: [id], onDelete: Cascade)
 
   @@unique([codeId, viewerId])
   @@index([codeId])
@@ -414,34 +416,38 @@ model CodeRedemption {
 }
 
 // ============================================
-// POINTS & TRANSACTIONS
+// POINTS & LEDGER
 // ============================================
 
-model PointTransaction {
-  id              String            @id @default(cuid())
-  viewerId        String
-  streamId        String?
+model PointLedger {
+  id           String  @id @default(cuid())
+  fanProfileId String?
+  viewerId     String?
+  streamId     String?
 
-  // Transaction details
-  type            TransactionType
-  amount          Int
-  balanceBefore   Int
-  balanceAfter    Int
+  type          TransactionType
+  amount        Int
+  balanceBefore Int
+  balanceAfter  Int
 
-  // Reference
-  referenceType   String?
-  referenceId     String?
-  description     String?
+  referenceType String?
+  referenceId   String?
+  description   String?
+  adjustedBy    String?
 
-  // Admin adjustments
-  adjustedBy      String?
+  // Reversal tracking
+  isReversed Boolean   @default(false)
+  reversedBy String?
+  reversedAt DateTime?
 
-  createdAt       DateTime          @default(now())
+  createdAt DateTime @default(now())
 
   // Relations
-  viewer          Viewer            @relation(fields: [viewerId], references: [id], onDelete: Cascade)
-  stream          Stream?           @relation(fields: [streamId], references: [id], onDelete: SetNull)
+  fanProfile FanProfile? @relation(fields: [fanProfileId], references: [id], onDelete: SetNull)
+  viewer     Viewer?     @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+  stream     Stream?     @relation(fields: [streamId], references: [id], onDelete: SetNull)
 
+  @@index([fanProfileId])
   @@index([viewerId])
   @@index([streamId])
   @@index([createdAt])
@@ -469,6 +475,7 @@ enum TransactionType {
   COURSE_COMPLETION
   MODULE_COMPLETION
   STREAK_PAUSE_COST
+  SUPER_CHAT_BONUS
 }
 
 // ============================================
@@ -476,36 +483,36 @@ enum TransactionType {
 // ============================================
 
 model ChatMessage {
-  id                  String    @id @default(cuid())
-  streamId            String
-  viewerId            String
-  youtubeMessageId    String    @unique
+  id               String @id @default(cuid())
+  streamId         String
+  viewerId         String
+  youtubeMessageId String @unique
 
   // Message content
-  messageText         String
-  messageType         String    // "textMessageEvent", "superChatEvent", etc.
+  messageText String
+  messageType String // "textMessageEvent", "superChatEvent", etc.
 
   // Timing
-  publishedAt         DateTime
-  processedAt         DateTime  @default(now())
+  publishedAt DateTime
+  processedAt DateTime @default(now())
 
   // YouTube metadata
-  isSuperChat         Boolean   @default(false)
-  superChatAmount     Float?
-  superChatCurrency   String?
+  isSuperChat       Boolean @default(false)
+  superChatAmount   Float?
+  superChatCurrency String?
 
   // Code detection
-  containsCode        Boolean   @default(false)
-  detectedCode        String?
+  containsCode Boolean @default(false)
+  detectedCode String?
 
   // Anti-fraud analysis
   similarityHash      String?
-  flaggedAsSuspicious Boolean   @default(false)
+  flaggedAsSuspicious Boolean @default(false)
   suspicionReason     String?
 
   // Relations
-  stream              Stream    @relation(fields: [streamId], references: [id], onDelete: Cascade)
-  viewer              Viewer    @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+  stream Stream @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  viewer Viewer @relation(fields: [viewerId], references: [id], onDelete: Cascade)
 
   @@index([streamId])
   @@index([viewerId])
@@ -519,31 +526,31 @@ model ChatMessage {
 // ============================================
 
 model FraudEvent {
-  id                    String         @id @default(cuid())
-  viewerId              String
-  streamId              String?
+  id       String  @id @default(cuid())
+  viewerId String
+  streamId String?
 
   // Event details
-  eventType             FraudEventType
-  severity              FraudSeverity
-  description           String
-  evidence              Json?
+  eventType   FraudEventType
+  severity    FraudSeverity
+  description String
+  evidence    Json?
 
   // Impact
-  trustPenaltyApplied   Float
-  wasAutoBanned         Boolean        @default(false)
+  trustPenaltyApplied Float
+  wasAutoBanned       Boolean @default(false)
 
   // Review
-  reviewStatus          ReviewStatus   @default(PENDING)
-  reviewedAt            DateTime?
-  reviewedBy            String?
-  reviewNotes           String?
+  reviewStatus ReviewStatus @default(PENDING)
+  reviewedAt   DateTime?
+  reviewedBy   String?
+  reviewNotes  String?
 
-  createdAt             DateTime       @default(now())
+  createdAt DateTime @default(now())
 
   // Relations
-  viewer                Viewer         @relation(fields: [viewerId], references: [id], onDelete: Cascade)
-  stream                Stream?        @relation(fields: [streamId], references: [id], onDelete: SetNull)
+  viewer Viewer  @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+  stream Stream? @relation(fields: [streamId], references: [id], onDelete: SetNull)
 
   @@index([viewerId])
   @@index([streamId])
@@ -591,50 +598,50 @@ enum RewardCategory {
 }
 
 model RewardConfig {
-  id                String    @id @default(cuid())
-  channelId         String
+  id        String @id @default(cuid())
+  channelId String
 
   // Reward details
-  name              String
-  description       String?
-  imageUrl          String?
+  name        String
+  description String?
+  imageUrl    String?
 
   // Reward type
-  rewardType        RewardType @default(DIGITAL)
-  requiresShipping  Boolean    @default(false)
-  stockQuantity     Int?
+  rewardType       RewardType @default(DIGITAL)
+  requiresShipping Boolean    @default(false)
+  stockQuantity    Int?
 
   // Cost in tokens (1000 points = 1 token)
-  tokenCost         Int
+  tokenCost Int
 
   // Limits
-  maxPerViewer      Int?
-  maxTotal          Int?
-  currentTotal      Int       @default(0)
+  maxPerViewer Int?
+  maxTotal     Int?
+  currentTotal Int  @default(0)
 
   // Availability
-  isActive          Boolean   @default(true)
-  availableFrom     DateTime?
-  availableUntil    DateTime?
+  isActive       Boolean   @default(true)
+  availableFrom  DateTime?
+  availableUntil DateTime?
 
   // Minimum requirements
-  minTrustScore     Float     @default(30)
-  minAccountAgeDays Int       @default(7)
+  minTrustScore     Float          @default(30)
+  minAccountAgeDays Int            @default(7)
   minRank           ViewerRank?
-  category                  RewardCategory @default(GATEWAY)
-  funnelPosition            Int            @default(0)
-  externalCourseId          String?
-  externalModuleId          String?
-  isLimitedTime             Boolean        @default(false)
-  limitedTimeEndsAt         DateTime?
-  pointsCost                Int            @default(0)
+  category          RewardCategory @default(GATEWAY)
+  funnelPosition    Int            @default(0)
+  externalCourseId  String?
+  externalModuleId  String?
+  isLimitedTime     Boolean        @default(false)
+  limitedTimeEndsAt DateTime?
+  pointsCost        Int            @default(0)
 
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  channel           Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  redemptions       RewardRedemption[]
+  channel     Channel            @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  redemptions RewardRedemption[]
 
   @@index([channelId])
   @@index([isActive])
@@ -646,18 +653,18 @@ enum RewardType {
 }
 
 model RewardRedemption {
-  id              String    @id @default(cuid())
-  rewardId        String
-  viewerId        String
+  id       String @id @default(cuid())
+  rewardId String
+  viewerId String
 
   // Redemption details
-  tokensSpent     Int
-  pointsSpent     Int       // tokensSpent * 1000
+  tokensSpent Int
+  pointsSpent Int // tokensSpent * 1000
 
   // Reward delivery
-  rewardCode      String?   // Generated discount code, etc.
-  deliveryStatus  DeliveryStatus @default(PENDING)
-  deliveredAt     DateTime?
+  rewardCode     String? // Generated discount code, etc.
+  deliveryStatus DeliveryStatus @default(PENDING)
+  deliveredAt    DateTime?
 
   // Shipping information (for physical rewards)
   shippingName    String?
@@ -671,14 +678,14 @@ model RewardRedemption {
   shippedAt       DateTime?
 
   // Admin notes
-  adminNotes      String?
+  adminNotes String?
 
   // Audit
-  redeemedAt      DateTime  @default(now())
+  redeemedAt DateTime @default(now())
 
   // Relations
-  reward          RewardConfig @relation(fields: [rewardId], references: [id], onDelete: Cascade)
-  viewer          Viewer       @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+  reward RewardConfig @relation(fields: [rewardId], references: [id], onDelete: Cascade)
+  viewer Viewer       @relation(fields: [viewerId], references: [id], onDelete: Cascade)
 
   @@index([rewardId])
   @@index([viewerId])
@@ -700,16 +707,16 @@ enum DeliveryStatus {
 // ============================================
 
 model AuditLog {
-  id              String    @id @default(cuid())
-  userId          String?
-  entityType      String
-  entityId        String
-  action          String
-  previousValue   Json?
-  newValue        Json?
-  ipAddress       String?
+  id            String  @id @default(cuid())
+  userId        String?
+  entityType    String
+  entityId      String
+  action        String
+  previousValue Json?
+  newValue      Json?
+  ipAddress     String?
 
-  createdAt       DateTime  @default(now())
+  createdAt DateTime @default(now())
 
   @@index([userId])
   @@index([entityType, entityId])
@@ -717,18 +724,18 @@ model AuditLog {
 }
 
 model QuotaUsageLog {
-  id              String    @id @default(cuid())
-  channelId       String
-  date            DateTime  @db.Date
+  id        String   @id @default(cuid())
+  channelId String
+  date      DateTime @db.Date
 
   // Breakdown
-  liveChatCalls   Int       @default(0)
-  insertCalls     Int       @default(0)
-  otherApiCalls   Int       @default(0)
-  totalUnits      Int       @default(0)
+  liveChatCalls Int @default(0)
+  insertCalls   Int @default(0)
+  otherApiCalls Int @default(0)
+  totalUnits    Int @default(0)
 
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([channelId, date])
   @@index([channelId])
@@ -736,22 +743,50 @@ model QuotaUsageLog {
 }
 
 // ============================================
-// VIEWER AUTHENTICATION (Portal OAuth)
+// FAN PROFILE (Global Identity + Wallet)
+// Evolved from ViewerAccount
 // ============================================
 
-model ViewerAccount {
-  id            String   @id @default(cuid())
-  googleId      String   @unique
-  email         String
+model FanProfile {
+  id              String  @id @default(cuid())
+  googleId        String  @unique
+  email           String
+  displayName     String  @default("")
+  profileImageUrl String?
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  // Global wallet
+  totalPoints     Int        @default(0)
+  availablePoints Int        @default(0)
+  lifetimePoints  Int        @default(0)
+  rank            ViewerRank @default(PAPER_TRADER)
+  trustScore      Float      @default(50.0)
+
+  // Global streaks
+  currentStreak Int @default(0)
+  longestStreak Int @default(0)
+
+  // Global ban status
+  isBanned  Boolean   @default(false)
+  banReason String?
+  bannedAt  DateTime?
+
+  // Workspace
+  workspaceId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  viewers       Viewer[]
+  workspace        Workspace?        @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  viewers          Viewer[]
+  pointLedger      PointLedger[]
+  engagementEvents EngagementEvent[]
 
   @@index([googleId])
   @@index([email])
+  @@index([workspaceId])
+  @@index([totalPoints])
+  @@index([rank])
 }
 
 // ============================================
@@ -759,22 +794,22 @@ model ViewerAccount {
 // ============================================
 
 model Referral {
-  id                String    @id @default(cuid())
-  referrerId        String
-  referredId        String
-  channelId         String
+  id         String @id @default(cuid())
+  referrerId String
+  referredId String
+  channelId  String
 
-  referredAttended  Boolean   @default(false)
-  referredPurchased Boolean   @default(false)
-  referrerPointsAwarded Int   @default(0)
-  referredPointsAwarded Int   @default(0)
+  referredAttended      Boolean @default(false)
+  referredPurchased     Boolean @default(false)
+  referrerPointsAwarded Int     @default(0)
+  referredPointsAwarded Int     @default(0)
 
-  createdAt         DateTime  @default(now())
-  convertedAt       DateTime?
+  createdAt   DateTime  @default(now())
+  convertedAt DateTime?
 
-  referrer          Viewer    @relation("ReferralsMade", fields: [referrerId], references: [id], onDelete: Cascade)
-  referred          Viewer    @relation("ReferralsReceived", fields: [referredId], references: [id], onDelete: Cascade)
-  channel           Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  referrer Viewer  @relation("ReferralsMade", fields: [referrerId], references: [id], onDelete: Cascade)
+  referred Viewer  @relation("ReferralsReceived", fields: [referredId], references: [id], onDelete: Cascade)
+  channel  Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
   @@unique([referrerId, referredId, channelId])
   @@index([referrerId])
@@ -787,30 +822,30 @@ model Referral {
 // ============================================
 
 model StreamPoll {
-  id                String    @id @default(cuid())
-  streamId          String
-  question          String
-  options           Json
-  isActive          Boolean   @default(true)
-  closedAt          DateTime?
-  createdAt         DateTime  @default(now())
+  id        String    @id @default(cuid())
+  streamId  String
+  question  String
+  options   Json
+  isActive  Boolean   @default(true)
+  closedAt  DateTime?
+  createdAt DateTime  @default(now())
 
-  stream            Stream    @relation(fields: [streamId], references: [id], onDelete: Cascade)
-  responses         PollResponse[]
+  stream    Stream         @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  responses PollResponse[]
 
   @@index([streamId])
 }
 
 model PollResponse {
-  id                String    @id @default(cuid())
-  pollId            String
-  viewerId          String
-  selectedOption    Int
-  pointsAwarded     Int       @default(15)
-  createdAt         DateTime  @default(now())
+  id             String   @id @default(cuid())
+  pollId         String
+  viewerId       String
+  selectedOption Int
+  pointsAwarded  Int      @default(15)
+  createdAt      DateTime @default(now())
 
-  poll              StreamPoll @relation(fields: [pollId], references: [id], onDelete: Cascade)
-  viewer            Viewer     @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+  poll   StreamPoll @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  viewer Viewer     @relation(fields: [viewerId], references: [id], onDelete: Cascade)
 
   @@unique([pollId, viewerId])
   @@index([viewerId])
@@ -821,20 +856,20 @@ model PollResponse {
 // ============================================
 
 model HomeworkSubmission {
-  id                String          @id @default(cuid())
-  viewerId          String
-  channelId         String
-  title             String
-  content           String
-  imageUrl          String?
-  status            HomeworkStatus  @default(PENDING)
-  reviewedBy        String?
-  pointsAwarded     Int             @default(0)
-  createdAt         DateTime        @default(now())
-  reviewedAt        DateTime?
+  id            String         @id @default(cuid())
+  viewerId      String
+  channelId     String
+  title         String
+  content       String
+  imageUrl      String?
+  status        HomeworkStatus @default(PENDING)
+  reviewedBy    String?
+  pointsAwarded Int            @default(0)
+  createdAt     DateTime       @default(now())
+  reviewedAt    DateTime?
 
-  viewer            Viewer    @relation(fields: [viewerId], references: [id], onDelete: Cascade)
-  channel           Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  viewer  Viewer  @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
   @@index([viewerId])
   @@index([channelId])
@@ -848,35 +883,76 @@ enum HomeworkStatus {
 }
 
 // ============================================
+// WORKSPACE & IDENTITY ENUMS
+// ============================================
+
+enum WorkspaceMemberRole {
+  OWNER
+  ADMIN
+  MODERATOR
+}
+
+enum TokenStatus {
+  VALID
+  EXPIRED
+  REVOKED
+}
+
+enum EngagementEventType {
+  CHAT_MESSAGE
+  SUPER_CHAT
+  MEMBERSHIP
+  CODE_REDEMPTION
+  ATTENDANCE
+  VIDEO_COMMENT
+}
+
+enum JobType {
+  INGEST_CHAT
+  INGEST_COMMENTS
+  DISCOVER_VIDEOS
+  DAILY_SCORING
+  FRAUD_SCAN
+  BACKFILL
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+// ============================================
 // WEBHOOK CONFIGURATION
 // ============================================
 
 model WebhookConfig {
-  id                String    @id @default(cuid())
-  channelId         String
-  url               String
-  events            Json
-  secret            String
-  isActive          Boolean   @default(true)
-  lastTriggeredAt   DateTime?
-  failureCount      Int       @default(0)
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  id              String    @id @default(cuid())
+  channelId       String
+  url             String
+  events          Json
+  secret          String
+  isActive        Boolean   @default(true)
+  lastTriggeredAt DateTime?
+  failureCount    Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  channel           Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
   @@index([channelId])
 }
 
 model WebhookDelivery {
-  id                String    @id @default(cuid())
-  webhookId         String
-  event             String
-  payload           Json
-  statusCode        Int?
-  response          String?
-  deliveredAt       DateTime?
-  createdAt         DateTime  @default(now())
+  id          String    @id @default(cuid())
+  webhookId   String
+  event       String
+  payload     Json
+  statusCode  Int?
+  response    String?
+  deliveredAt DateTime?
+  createdAt   DateTime  @default(now())
 
   @@index([webhookId])
   @@index([event])
@@ -887,15 +963,15 @@ model WebhookDelivery {
 // ============================================
 
 model HelpfulUpvote {
-  id                String    @id @default(cuid())
-  giverId           String
-  receiverId        String
-  streamId          String
-  createdAt         DateTime  @default(now())
+  id         String   @id @default(cuid())
+  giverId    String
+  receiverId String
+  streamId   String
+  createdAt  DateTime @default(now())
 
-  giver             Viewer    @relation("UpvotesGiven", fields: [giverId], references: [id], onDelete: Cascade)
-  receiver          Viewer    @relation("UpvotesReceived", fields: [receiverId], references: [id], onDelete: Cascade)
-  stream            Stream    @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  giver    Viewer @relation("UpvotesGiven", fields: [giverId], references: [id], onDelete: Cascade)
+  receiver Viewer @relation("UpvotesReceived", fields: [receiverId], references: [id], onDelete: Cascade)
+  stream   Stream @relation(fields: [streamId], references: [id], onDelete: Cascade)
 
   @@unique([giverId, receiverId, streamId])
   @@index([receiverId])
@@ -907,16 +983,125 @@ model HelpfulUpvote {
 // ============================================
 
 model StreakPause {
-  id                String    @id @default(cuid())
-  viewerId          String
-  pauseType         String
-  pointsCost        Int       @default(0)
-  startedAt         DateTime
-  endsAt            DateTime
-  wasUsed           Boolean   @default(true)
-  createdAt         DateTime  @default(now())
+  id         String   @id @default(cuid())
+  viewerId   String
+  pauseType  String
+  pointsCost Int      @default(0)
+  startedAt  DateTime
+  endsAt     DateTime
+  wasUsed    Boolean  @default(true)
+  createdAt  DateTime @default(now())
 
-  viewer            Viewer    @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+  viewer Viewer @relation(fields: [viewerId], references: [id], onDelete: Cascade)
 
   @@index([viewerId])
+}
+
+// ============================================
+// WORKSPACE
+// ============================================
+
+model Workspace {
+  id       String @id @default(cuid())
+  name     String
+  slug     String @unique
+  ownerId  String
+  settings Json   @default("{}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner       User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  members     WorkspaceMember[]
+  channels    Channel[]
+  fanProfiles FanProfile[]
+
+  @@index([ownerId])
+  @@index([slug])
+}
+
+model WorkspaceMember {
+  id          String              @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        WorkspaceMemberRole @default(ADMIN)
+
+  createdAt DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+}
+
+// ============================================
+// CHANNEL CREDENTIALS (Per-Channel OAuth)
+// ============================================
+
+model ChannelCredential {
+  id                 String      @id @default(cuid())
+  channelId          String      @unique
+  googleAccountEmail String
+  accessToken        String
+  refreshToken       String
+  tokenExpiresAt     DateTime?
+  tokenStatus        TokenStatus @default(VALID)
+  lastRefreshedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+}
+
+// ============================================
+// ENGAGEMENT EVENTS (Immutable Raw Events)
+// ============================================
+
+model EngagementEvent {
+  id           String              @id @default(cuid())
+  fanProfileId String?
+  channelId    String
+  streamId     String?
+  externalId   String              @unique
+  eventType    EngagementEventType
+  payload      Json
+  occurredAt   DateTime
+  ingestedAt   DateTime            @default(now())
+
+  fanProfile FanProfile? @relation(fields: [fanProfileId], references: [id], onDelete: SetNull)
+  channel    Channel     @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  stream     Stream?     @relation(fields: [streamId], references: [id], onDelete: SetNull)
+
+  @@index([channelId, occurredAt])
+  @@index([fanProfileId])
+  @@index([eventType])
+  @@index([externalId])
+}
+
+// ============================================
+// JOB TRACKING
+// ============================================
+
+model JobRun {
+  id        String    @id @default(cuid())
+  jobType   JobType
+  status    JobStatus @default(PENDING)
+  channelId String?
+
+  startedAt       DateTime?
+  completedAt     DateTime?
+  eventsProcessed Int       @default(0)
+  errorsCount     Int       @default(0)
+  errorMessage    String?
+  metadata        Json?
+
+  createdAt DateTime @default(now())
+
+  channel Channel? @relation(fields: [channelId], references: [id], onDelete: SetNull)
+
+  @@index([jobType, status])
+  @@index([channelId])
+  @@index([createdAt])
 }

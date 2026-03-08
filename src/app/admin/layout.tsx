@@ -8,6 +8,7 @@ import { usePathname } from 'next/navigation'
 
 const navigation = [
   { name: 'Dashboard', href: '/admin' },
+  { name: 'Channels', href: '/admin/channels' },
   { name: 'Streams', href: '/admin/streams' },
   { name: 'Viewers', href: '/admin/viewers' },
   { name: 'Rewards', href: '/admin/rewards' },
@@ -15,6 +16,7 @@ const navigation = [
   { name: 'Analytics', href: '/admin/analytics' },
   { name: 'Homework', href: '/admin/homework' },
   { name: 'Webhooks', href: '/admin/webhooks' },
+  { name: 'Ops', href: '/admin/ops' },
 ]
 
 export default function AdminLayout({

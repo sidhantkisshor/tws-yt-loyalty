@@ -5,6 +5,16 @@ import Link from 'next/link'
 import { useViewer } from '@/components/ViewerProvider'
 import { RANK_THRESHOLDS, RANK_BADGE_COLORS, ViewerRankName } from '@/lib/ranks'
 
+interface GlobalWallet {
+  totalPoints: number
+  availablePoints: number
+  lifetimePoints: number
+  rank: string
+  trustScore: number
+  currentStreak: number
+  longestStreak: number
+}
+
 interface ViewerProfile {
   id: string
   displayName: string
@@ -110,6 +120,7 @@ function formatWatchTime(minutes: number): string {
 export default function ViewerDashboard() {
   const { activeChannelId } = useViewer()
   const [profile, setProfile] = useState<ViewerProfile | null>(null)
+  const [globalWallet, setGlobalWallet] = useState<GlobalWallet | null>(null)
   const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -127,6 +138,7 @@ export default function ViewerDashboard() {
       if (profileRes.ok) {
         const data = await profileRes.json()
         setProfile(data.viewer)
+        setGlobalWallet(data.globalWallet || null)
       }
 
       if (transactionsRes.ok) {
@@ -198,9 +210,16 @@ export default function ViewerDashboard() {
             {profile.displayName}
           </h1>
         </div>
-        <div className="flex items-center gap-2 text-sm text-gray-500">
-          <span className="w-2 h-2 bg-[var(--neon-green)] rounded-full animate-pulse" />
-          Earning on <span className="text-white font-medium">{profile.channel.title}</span>
+        <div className="flex flex-col items-end gap-1">
+          {globalWallet && (
+            <span className="text-[var(--neon-purple)] text-xs font-[Orbitron] tracking-wider uppercase">
+              Global Wallet
+            </span>
+          )}
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+            <span className="w-2 h-2 bg-[var(--neon-green)] rounded-full animate-pulse" />
+            Earning on <span className="text-white font-medium">{profile.channel.title}</span>
+          </div>
         </div>
       </div>
 

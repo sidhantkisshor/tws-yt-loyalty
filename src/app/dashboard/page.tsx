@@ -26,7 +26,7 @@ interface Viewer {
     title: string
     thumbnailUrl: string | null
   }
-  pointTransactions: Array<{
+  pointLedger: Array<{
     id: string
     type: string
     amount: number
@@ -264,10 +264,10 @@ export default function ViewerDashboard() {
               <div className="bg-gray-800 rounded-lg p-6">
                 <h3 className="text-lg font-bold mb-4">Recent Transactions</h3>
                 <div className="space-y-3">
-                  {viewer.pointTransactions.length === 0 ? (
+                  {viewer.pointLedger.length === 0 ? (
                     <p className="text-gray-500">No transactions yet</p>
                   ) : (
-                    viewer.pointTransactions.slice(0, 10).map((tx) => (
+                    viewer.pointLedger.slice(0, 10).map((tx) => (
                       <div
                         key={tx.id}
                         className="flex items-center justify-between py-2 border-b border-gray-700 last:border-0"

@@ -80,7 +80,7 @@ export async function PATCH(
         })
 
         // Create point transaction
-        await tx.pointTransaction.create({
+        await tx.pointLedger.create({
           data: {
             viewerId: submission.viewer.id,
             type: 'HOMEWORK_SUBMISSION',

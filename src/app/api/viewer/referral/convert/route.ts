@@ -107,8 +107,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         },
       })
 
-      // Create PointTransaction record
-      await tx.pointTransaction.create({
+      // Create PointLedger record
+      await tx.pointLedger.create({
         data: {
           viewerId: session.viewerId!,
           type: 'REFERRAL_BONUS',

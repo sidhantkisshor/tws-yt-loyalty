@@ -9,6 +9,7 @@ import { calculateBonuses, isEarlyBirdEligible } from './bonusCalculator'
 import { LiveChatMessage } from '@/lib/youtube'
 import { getRankForPoints } from '@/lib/ranks'
 import { parseChatCommand } from '@/services/chatCommandParser'
+import { logger } from '@/lib/logger'
 
 // ============================================
 // CODE DETECTION
@@ -84,6 +85,33 @@ export async function processMessage(
     updateAttendance(streamId, viewer.id, message),
   ])
 
+  // Log engagement event for the chat message
+  try {
+    await prisma.engagementEvent.upsert({
+      where: { externalId: message.id },
+      create: {
+        externalId: message.id,
+        channelId,
+        streamId,
+        fanProfileId: viewer.fanProfileId ?? null,
+        eventType: message.superChatAmount ? 'SUPER_CHAT' : 'CHAT_MESSAGE',
+        payload: {
+          authorChannelId: message.authorChannelId,
+          authorDisplayName: message.authorDisplayName,
+          messageText: message.messageText,
+          messageType: message.messageType,
+          superChatAmount: message.superChatAmount,
+          superChatCurrency: message.superChatCurrency,
+        },
+        occurredAt: new Date(message.publishedAt),
+      },
+      update: {}, // No-op on duplicate
+    })
+  } catch (error) {
+    // Don't fail message processing if event logging fails
+    logger.warn('Failed to log engagement event', { externalId: message.id, error })
+  }
+
   let pointsAwarded = 0
   let fraudDetected = false
 
@@ -138,7 +166,7 @@ export async function processMessage(
                     where: { id: viewer.id },
                     data: { helpfulUpvotesGiven: { increment: 1 } },
                   }),
-                  prisma.pointTransaction.create({
+                  prisma.pointLedger.create({
                     data: {
                       viewerId: target.id,
                       streamId,
@@ -176,7 +204,7 @@ export async function processMessage(
                   lifetimePoints: { increment: 20 },
                 },
               }),
-              prisma.pointTransaction.create({
+              prisma.pointLedger.create({
                 data: {
                   viewerId: target.id,
                   streamId,
@@ -213,7 +241,7 @@ export async function processMessage(
 async function upsertViewer(
   channelId: string,
   message: LiveChatMessage
-): Promise<{ viewer: { id: string; isBanned: boolean; trustScore: number; isMember: boolean; isModerator: boolean }; isNew: boolean }> {
+): Promise<{ viewer: { id: string; isBanned: boolean; trustScore: number; isMember: boolean; isModerator: boolean; fanProfileId: string | null }; isNew: boolean }> {
   const existing = await prisma.viewer.findUnique({
     where: {
       youtubeChannelId_channelId: {
@@ -221,7 +249,7 @@ async function upsertViewer(
         channelId,
       },
     },
-    select: { id: true, isBanned: true, trustScore: true, isMember: true, isModerator: true },
+    select: { id: true, isBanned: true, trustScore: true, isMember: true, isModerator: true, fanProfileId: true },
   })
 
   if (existing) {
@@ -251,7 +279,7 @@ async function upsertViewer(
       isModerator: message.authorIsChatModerator,
       totalMessagesCount: 1,
     },
-    select: { id: true, isBanned: true, trustScore: true, isMember: true, isModerator: true },
+    select: { id: true, isBanned: true, trustScore: true, isMember: true, isModerator: true, fanProfileId: true },
   })
 
   return { viewer: newViewer, isNew: true }
@@ -483,7 +511,7 @@ async function processCodeRedemption(
       })
 
       // Create transaction record
-      await tx.pointTransaction.create({
+      await tx.pointLedger.create({
         data: {
           viewerId,
           streamId,
@@ -530,6 +558,29 @@ async function processCodeRedemption(
       }
     }
     throw error // Re-throw unexpected errors
+  }
+
+  // Log engagement event for the code redemption
+  try {
+    await prisma.engagementEvent.upsert({
+      where: { externalId: `redemption:${codeId}:${viewerId}` },
+      create: {
+        externalId: `redemption:${codeId}:${viewerId}`,
+        channelId,
+        streamId,
+        fanProfileId: viewer.fanProfileId ?? null,
+        eventType: 'CODE_REDEMPTION',
+        payload: {
+          codeId: code.id,
+          code: code.code,
+          pointsAwarded: totalPoints,
+        },
+        occurredAt: new Date(),
+      },
+      update: {},
+    })
+  } catch (error) {
+    logger.warn('Failed to log redemption event', { error })
   }
 
   // 11. Update leaderboards in Redis (with cached display name for faster lookups)

@@ -268,7 +268,7 @@ export async function awardFullStreamBonuses(streamId: string): Promise<number> 
       })
     ),
     // Create all point transactions
-    prisma.pointTransaction.createMany({
+    prisma.pointLedger.createMany({
       data: qualifyingAttendances.map((attendance) => ({
         viewerId: attendance.viewerId,
         streamId,
@@ -320,7 +320,7 @@ export async function awardEarlyBirdBonus(
         lifetimePoints: { increment: EARLY_BIRD_BONUS },
       },
     }),
-    prisma.pointTransaction.create({
+    prisma.pointLedger.create({
       data: {
         viewerId,
         streamId,

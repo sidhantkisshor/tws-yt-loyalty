@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { env } from '@/lib/env'
 import { logger } from '@/lib/logger'
+import { acquireLock, releaseLock } from '@/lib/redis'
 import { TIER_MAINTENANCE_90DAY, isPrestigeTier, type ViewerRankName } from '@/lib/ranks'
 import { dispatchWebhooks } from '@/services/webhookDispatcher'
 
@@ -25,6 +26,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const authHeader = request.headers.get('authorization')
   if (authHeader !== `Bearer ${env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // Acquire distributed lock (TTL 300s = 5 minutes)
+  const lockId = await acquireLock('cron:tier-decay', 300)
+  if (!lockId) {
+    return NextResponse.json({ error: 'Already running' }, { status: 409 })
   }
 
   try {
@@ -62,7 +69,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
       for (const viewer of viewers) {
         // Sum positive points earned in last 90 days
-        const pointsResult = await prisma.pointTransaction.aggregate({
+        const pointsResult = await prisma.pointLedger.aggregate({
           where: {
             viewerId: viewer.id,
             amount: { gt: 0 },
@@ -116,5 +123,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       { error: 'Tier decay cron failed' },
       { status: 500 }
     )
+  } finally {
+    await releaseLock('cron:tier-decay', lockId)
   }
 }

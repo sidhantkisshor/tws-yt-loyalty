@@ -173,7 +173,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       })
 
       // Create transaction record
-      await tx.pointTransaction.create({
+      await tx.pointLedger.create({
         data: {
           viewerId,
           type: 'REWARD_REDEMPTION',

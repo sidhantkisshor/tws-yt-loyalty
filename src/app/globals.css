@@ -1,26 +1,359 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Brand Colors - Inspired by TWS */
+  --background: #0a0a0a;
+  --foreground: #ffffff;
+
+  /* Accent Colors */
+  --accent-cyan: #06b6d4;
+  --accent-blue: #3b82f6;
+  --accent-purple: #a855f7;
+  --accent-pink: #ec4899;
+  --accent-green: #10b981;
+  --accent-yellow: #f59e0b;
+  --accent-orange: #f97316;
+
+  /* Rank Colors */
+  --rank-observer: #6b7280;
+  --rank-operator: #22c55e;
+  --rank-sniper: #3b82f6;
+  --rank-architect: #a855f7;
+  --rank-inner-circle: #fbbf24;
+
+  /* Surface Colors */
+  --surface-dark: #0f0f0f;
+  --surface-light: #1a1a1a;
+  --border-subtle: rgba(255, 255, 255, 0.05);
+  --border-normal: rgba(255, 255, 255, 0.1);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: 'Inter', sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+/* Base Styles */
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: 'Inter', sans-serif;
+}
+
+/* Smooth Scroll */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Utility Classes */
+.text-balance {
+  text-wrap: balance;
+}
+
+/* Cyber Card Styles - For Admin Dashboard */
+.cyber-card {
+  background: linear-gradient(135deg, rgba(26, 26, 26, 0.9) 0%, rgba(15, 15, 15, 0.95) 100%);
+  border: 1px solid var(--border-normal);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Progress Bar Styles */
+.cyber-progress {
+  background: var(--surface-light);
+  border: 1px solid var(--border-normal);
+  overflow: hidden;
+}
+
+.cyber-progress-bar {
+  background: linear-gradient(90deg, var(--accent-cyan), var(--accent-purple));
+  box-shadow: 0 0 10px var(--accent-cyan);
+  position: relative;
+}
+
+.cyber-progress-bar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* Rank Badge Styles */
+.rank-badge {
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  position: relative;
+}
+
+.rank-observer {
+  background: linear-gradient(135deg, #374151, #4b5563);
+  border: 1px solid #6b7280;
+  color: #d1d5db;
+}
+
+.rank-operator {
+  background: linear-gradient(135deg, #064e3b, #065f46);
+  border: 1px solid var(--rank-operator);
+  color: var(--rank-operator);
+  box-shadow: 0 0 15px rgba(34, 197, 94, 0.3);
+}
+
+.rank-sniper {
+  background: linear-gradient(135deg, #1e3a5f, #1e40af);
+  border: 1px solid var(--rank-sniper);
+  color: var(--rank-sniper);
+  box-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
+}
+
+.rank-architect {
+  background: linear-gradient(135deg, #4c1d95, #6b21a8);
+  border: 1px solid var(--rank-architect);
+  color: var(--rank-architect);
+  box-shadow: 0 0 15px rgba(168, 85, 247, 0.3);
+}
+
+.rank-inner-circle {
+  background: linear-gradient(135deg, #78350f, #92400e);
+  border: 1px solid var(--rank-inner-circle);
+  color: var(--rank-inner-circle);
+  box-shadow: 0 0 20px rgba(251, 191, 36, 0.4);
+  animation: pulse-gold 2s ease-in-out infinite;
+}
+
+@keyframes pulse-gold {
+  0%, 100% { box-shadow: 0 0 20px rgba(251, 191, 36, 0.4); }
+  50% { box-shadow: 0 0 30px rgba(251, 191, 36, 0.6), 0 0 40px rgba(251, 191, 36, 0.3); }
+}
+
+/* Stat Counter Animation */
+.stat-value {
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  background: linear-gradient(135deg, #fff, var(--accent-cyan));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Glass Effect */
+.glass {
+  background: rgba(26, 26, 26, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--border-normal);
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--surface-dark);
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--accent-cyan), var(--accent-purple));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, var(--accent-blue), var(--accent-purple));
+}
+
+/* Selection */
+::selection {
+  background: var(--accent-cyan);
+  color: var(--background);
+}
+
+/* Loading Skeleton */
+.skeleton {
+  background: linear-gradient(90deg, var(--surface-light) 25%, var(--border-normal) 50%, var(--surface-light) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s infinite;
+}
+
+@keyframes skeleton-loading {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Transaction Type Icons */
+.tx-earn { color: var(--accent-green); }
+.tx-spend { color: var(--accent-pink); }
+.tx-bonus { color: var(--accent-yellow); }
+
+/* Reward Card Hover Effects */
+.reward-card {
+  transition: all 0.3s ease;
+}
+
+.reward-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--accent-cyan);
+  box-shadow: 0 10px 40px rgba(6, 182, 212, 0.15);
+}
+
+/* Digital/Physical Type Tags */
+.tag-digital {
+  background: linear-gradient(135deg, rgba(6, 182, 212, 0.2), rgba(59, 130, 246, 0.2));
+  border: 1px solid var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+.tag-physical {
+  background: linear-gradient(135deg, rgba(249, 115, 22, 0.2), rgba(236, 72, 153, 0.2));
+  border: 1px solid var(--accent-orange);
+  color: var(--accent-orange);
+}
+
+/* Status Badges */
+.status-pending {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(234, 179, 8, 0.2));
+  border: 1px solid var(--accent-yellow);
+  color: var(--accent-yellow);
+}
+
+.status-processing {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(6, 182, 212, 0.2));
+  border: 1px solid var(--accent-blue);
+  color: var(--accent-blue);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.status-shipped {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.2), rgba(147, 51, 234, 0.2));
+  border: 1px solid var(--accent-purple);
+  color: var(--accent-purple);
+}
+
+.status-delivered {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(5, 150, 105, 0.2));
+  border: 1px solid var(--accent-green);
+  color: var(--accent-green);
+}
+
+.status-failed {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(220, 38, 38, 0.2));
+  border: 1px solid #ef4444;
+  color: #ef4444;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* New Animations for Enhanced Landing Page */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes gradient {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes pulse-slow {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.05);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.6s ease-out forwards;
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.8s ease-out forwards;
+}
+
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradient 15s ease infinite;
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 4s ease-in-out infinite;
+}
+
+.delay-200 {
+  animation-delay: 200ms;
+}
+
+.delay-400 {
+  animation-delay: 400ms;
+}
+
+.delay-1000 {
+  animation-delay: 1000ms;
+}
+
+/* Hover Glow Effect */
+.hover-glow {
+  transition: all 0.3s ease;
+}
+
+.hover-glow:hover {
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.4), 0 0 40px rgba(6, 182, 212, 0.2);
+}
+
+/* Bounce Animation for Scroll Indicator */
+@keyframes bounce-down {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(8px);
+  }
+}
+
+.animate-bounce-down {
+  animation: bounce-down 2s ease-in-out infinite;
+}
+
+.delay-600 {
+  animation-delay: 600ms;
 }
