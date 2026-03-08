@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const { mockPrisma, mockRedis } = vi.hoisted(() => ({
   mockPrisma: {
-    $queryRawUnsafe: vi.fn(),
+    $queryRaw: vi.fn(),
     channelCredential: {
       groupBy: vi.fn(),
     },
@@ -49,7 +49,7 @@ describe('opsMonitor', () => {
   describe('getSystemHealth', () => {
     it('returns all health sections', async () => {
       // Setup mocks for a healthy system
-      mockPrisma.$queryRawUnsafe.mockResolvedValue([{ '?column?': 1 }])
+      mockPrisma.$queryRaw.mockResolvedValue([{ '?column?': 1 }])
       mockRedis.set.mockResolvedValue('OK')
       mockRedis.get.mockResolvedValue('pong')
       mockPrisma.channelCredential.groupBy.mockResolvedValue([
@@ -71,7 +71,7 @@ describe('opsMonitor', () => {
     })
 
     it('reports database as healthy with low latency', async () => {
-      mockPrisma.$queryRawUnsafe.mockResolvedValue([{ '?column?': 1 }])
+      mockPrisma.$queryRaw.mockResolvedValue([{ '?column?': 1 }])
       mockRedis.set.mockResolvedValue('OK')
       mockRedis.get.mockResolvedValue('pong')
       mockPrisma.channelCredential.groupBy.mockResolvedValue([])
@@ -87,7 +87,7 @@ describe('opsMonitor', () => {
     })
 
     it('reports database as down when query fails', async () => {
-      mockPrisma.$queryRawUnsafe.mockRejectedValue(new Error('Connection refused'))
+      mockPrisma.$queryRaw.mockRejectedValue(new Error('Connection refused'))
       mockRedis.set.mockResolvedValue('OK')
       mockRedis.get.mockResolvedValue('pong')
       mockPrisma.channelCredential.groupBy.mockResolvedValue([])
@@ -102,7 +102,7 @@ describe('opsMonitor', () => {
     })
 
     it('reports redis as healthy with successful set/get', async () => {
-      mockPrisma.$queryRawUnsafe.mockResolvedValue([{ '?column?': 1 }])
+      mockPrisma.$queryRaw.mockResolvedValue([{ '?column?': 1 }])
       mockRedis.set.mockResolvedValue('OK')
       mockRedis.get.mockResolvedValue('pong')
       mockPrisma.channelCredential.groupBy.mockResolvedValue([])
@@ -118,7 +118,7 @@ describe('opsMonitor', () => {
     })
 
     it('reports redis as down when it throws', async () => {
-      mockPrisma.$queryRawUnsafe.mockResolvedValue([{ '?column?': 1 }])
+      mockPrisma.$queryRaw.mockResolvedValue([{ '?column?': 1 }])
       mockRedis.set.mockRejectedValue(new Error('Redis connection failed'))
       mockPrisma.channelCredential.groupBy.mockResolvedValue([])
       mockPrisma.jobRun.count.mockResolvedValue(0)
@@ -132,7 +132,7 @@ describe('opsMonitor', () => {
     })
 
     it('aggregates channel health by token status', async () => {
-      mockPrisma.$queryRawUnsafe.mockResolvedValue([{ '?column?': 1 }])
+      mockPrisma.$queryRaw.mockResolvedValue([{ '?column?': 1 }])
       mockRedis.set.mockResolvedValue('OK')
       mockRedis.get.mockResolvedValue('pong')
       mockPrisma.channelCredential.groupBy.mockResolvedValue([
@@ -154,7 +154,7 @@ describe('opsMonitor', () => {
     })
 
     it('counts job failures in last 24h', async () => {
-      mockPrisma.$queryRawUnsafe.mockResolvedValue([{ '?column?': 1 }])
+      mockPrisma.$queryRaw.mockResolvedValue([{ '?column?': 1 }])
       mockRedis.set.mockResolvedValue('OK')
       mockRedis.get.mockResolvedValue('pong')
       mockPrisma.channelCredential.groupBy.mockResolvedValue([])
@@ -171,7 +171,7 @@ describe('opsMonitor', () => {
     it('calculates ingestion lag from last successful ingest', async () => {
       const thirtyMinsAgo = new Date(Date.now() - 30 * 60 * 1000)
 
-      mockPrisma.$queryRawUnsafe.mockResolvedValue([{ '?column?': 1 }])
+      mockPrisma.$queryRaw.mockResolvedValue([{ '?column?': 1 }])
       mockRedis.set.mockResolvedValue('OK')
       mockRedis.get.mockResolvedValue('pong')
       mockPrisma.channelCredential.groupBy.mockResolvedValue([])
@@ -190,7 +190,7 @@ describe('opsMonitor', () => {
     })
 
     it('returns -1 lag when no ingest has run', async () => {
-      mockPrisma.$queryRawUnsafe.mockResolvedValue([{ '?column?': 1 }])
+      mockPrisma.$queryRaw.mockResolvedValue([{ '?column?': 1 }])
       mockRedis.set.mockResolvedValue('OK')
       mockRedis.get.mockResolvedValue('pong')
       mockPrisma.channelCredential.groupBy.mockResolvedValue([])
@@ -205,7 +205,7 @@ describe('opsMonitor', () => {
     })
 
     it('reads quota from redis', async () => {
-      mockPrisma.$queryRawUnsafe.mockResolvedValue([{ '?column?': 1 }])
+      mockPrisma.$queryRaw.mockResolvedValue([{ '?column?': 1 }])
       mockRedis.set.mockResolvedValue('OK')
       // Use implementation to distinguish health ping vs quota key
       mockRedis.get.mockImplementation((key: string) => {
@@ -228,7 +228,7 @@ describe('opsMonitor', () => {
 
   describe('generateAlerts', () => {
     function setupHealthyMocks() {
-      mockPrisma.$queryRawUnsafe.mockResolvedValue([{ '?column?': 1 }])
+      mockPrisma.$queryRaw.mockResolvedValue([{ '?column?': 1 }])
       mockRedis.set.mockResolvedValue('OK')
       mockRedis.get.mockResolvedValue('pong')
       mockPrisma.channelCredential.groupBy.mockResolvedValue([
@@ -295,7 +295,7 @@ describe('opsMonitor', () => {
     })
 
     it('produces WARNING for expired tokens', async () => {
-      mockPrisma.$queryRawUnsafe.mockResolvedValue([{ '?column?': 1 }])
+      mockPrisma.$queryRaw.mockResolvedValue([{ '?column?': 1 }])
       mockRedis.set.mockResolvedValue('OK')
       mockRedis.get.mockResolvedValue('pong')
       mockPrisma.channelCredential.groupBy.mockResolvedValue([
@@ -347,7 +347,7 @@ describe('opsMonitor', () => {
     })
 
     it('produces CRITICAL when database is down', async () => {
-      mockPrisma.$queryRawUnsafe.mockRejectedValue(new Error('DB down'))
+      mockPrisma.$queryRaw.mockRejectedValue(new Error('DB down'))
       mockRedis.set.mockResolvedValue('OK')
       mockRedis.get.mockResolvedValue('pong')
       mockPrisma.channelCredential.groupBy.mockResolvedValue([])
@@ -365,7 +365,7 @@ describe('opsMonitor', () => {
     })
 
     it('produces CRITICAL when redis is down', async () => {
-      mockPrisma.$queryRawUnsafe.mockResolvedValue([{ '?column?': 1 }])
+      mockPrisma.$queryRaw.mockResolvedValue([{ '?column?': 1 }])
       mockRedis.set.mockRejectedValue(new Error('Redis down'))
       // quota check also uses redis.get
       mockRedis.get.mockRejectedValue(new Error('Redis down'))

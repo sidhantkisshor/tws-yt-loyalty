@@ -25,10 +25,12 @@ export async function GET(request: NextRequest) {
       })
     }
 
+    const ALLOWED_SORT_FIELDS = ['totalPoints', 'lifetimePoints', 'createdAt', 'lastSeenAt', 'displayName', 'rank']
     const { searchParams } = new URL(request.url)
     const channelId = searchParams.get('channelId')
     const search = searchParams.get('search')
-    const sortBy = searchParams.get('sortBy') || 'totalPoints'
+    const rawSortBy = searchParams.get('sortBy') || 'totalPoints'
+    const sortBy = ALLOWED_SORT_FIELDS.includes(rawSortBy) ? rawSortBy : 'totalPoints'
     const order = searchParams.get('order') || 'desc'
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '50')

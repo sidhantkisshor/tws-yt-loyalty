@@ -4,6 +4,12 @@ import { logger } from '@/lib/logger'
 import { checkAllChannelHealth } from '@/services/tokenManager'
 
 export async function GET(request: NextRequest) {
+  // SECURITY: Fail closed - reject if CRON_SECRET is not configured
+  if (!env.CRON_SECRET) {
+    logger.error('CRON_SECRET environment variable is not configured')
+    return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 })
+  }
+
   const authHeader = request.headers.get('authorization')
   if (authHeader !== `Bearer ${env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

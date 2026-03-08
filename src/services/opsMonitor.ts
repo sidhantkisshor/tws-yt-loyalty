@@ -41,7 +41,7 @@ export interface Alert {
 async function checkDatabaseHealth(): Promise<SystemHealth['database']> {
   const start = Date.now()
   try {
-    await prisma.$queryRawUnsafe('SELECT 1')
+    await prisma.$queryRaw`SELECT 1`
     const latencyMs = Date.now() - start
     return {
       status: latencyMs > 1000 ? 'degraded' : 'healthy',

@@ -6,6 +6,7 @@ import { env } from '@/lib/env'
 import { getChannelInfo } from '@/lib/youtube'
 import { logger } from '@/lib/logger'
 import { parseTokenExpiry } from '@/services/tokenManager'
+import crypto from 'crypto'
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -26,9 +27,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${env.NEXTAUTH_URL}/admin/channels?error=missing_params`)
   }
 
-  let state: { userId: string; channelId: string | null; action: string }
+  let state: { userId: string; channelId: string | null; action: string; ts: number }
   try {
-    state = JSON.parse(Buffer.from(stateParam, 'base64').toString())
+    const stateWrapper = JSON.parse(Buffer.from(stateParam, 'base64url').toString())
+    const expectedSig = crypto.createHmac('sha256', env.NEXTAUTH_SECRET).update(JSON.stringify(stateWrapper.data)).digest('hex')
+    if (!stateWrapper.sig || stateWrapper.sig !== expectedSig) {
+      logger.warn('OAuth state signature mismatch - possible tampering')
+      return NextResponse.redirect(`${env.NEXTAUTH_URL}/admin/channels?error=invalid_state`)
+    }
+    state = stateWrapper.data
   } catch {
     return NextResponse.redirect(`${env.NEXTAUTH_URL}/admin/channels?error=invalid_state`)
   }

@@ -161,14 +161,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
               reversalsCreated++
             }
 
-            // Update fan profile totals
+            // Update fan profile totals with floor at zero to prevent negative balances
             const totalReversed = recentLedgerEntries.reduce((sum, e) => sum + e.amount, 0)
             await prisma.fanProfile.update({
               where: { id: viewer.fanProfileId },
               data: {
                 totalPoints: Math.max(0, runningBalance),
-                availablePoints: { decrement: totalReversed },
-                lifetimePoints: { decrement: totalReversed },
+                availablePoints: Math.max(0, fanProfile.availablePoints - totalReversed),
+                lifetimePoints: Math.max(0, fanProfile.lifetimePoints - totalReversed),
               },
             })
           }

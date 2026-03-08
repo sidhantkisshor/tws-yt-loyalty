@@ -97,6 +97,14 @@ export async function GET(
       return NextResponse.json({ error: 'Viewer not found' }, { status: 404 })
     }
 
+    // For admin sessions, verify the viewer belongs to a channel owned by the admin
+    if (adminSession?.user?.id) {
+      const channel = await prisma.channel.findUnique({ where: { id: viewer.channelId } })
+      if (channel?.ownerId !== adminSession.user.id) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+    }
+
     // Calculate tokens (1000 points = 1 token)
     const availableTokens = Math.floor(viewer.availablePoints / 1000)
 

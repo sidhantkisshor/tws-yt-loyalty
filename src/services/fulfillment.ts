@@ -62,20 +62,7 @@ export async function fulfillRedemption(redemptionId: string): Promise<Fulfillme
       }
     }
 
-    // 2. Idempotent check: if already delivered, return success
-    if (redemption.deliveryStatus === 'DELIVERED') {
-      logger.info('Redemption already fulfilled, returning idempotently', {
-        redemptionId,
-        rewardCode: redemption.rewardCode,
-      })
-      return {
-        success: true,
-        deliveryCode: redemption.rewardCode ?? undefined,
-        deliveryMethod: 'IN_APP',
-      }
-    }
-
-    // 3. Skip non-digital rewards (physical rewards need manual fulfillment)
+    // 2. Skip non-digital rewards (physical rewards need manual fulfillment)
     if (redemption.reward.rewardType !== 'DIGITAL') {
       return {
         success: false,
@@ -84,7 +71,7 @@ export async function fulfillRedemption(redemptionId: string): Promise<Fulfillme
       }
     }
 
-    // 4. Skip cancelled redemptions
+    // 3. Skip cancelled redemptions
     if (redemption.deliveryStatus === 'CANCELLED') {
       return {
         success: false,
@@ -93,7 +80,36 @@ export async function fulfillRedemption(redemptionId: string): Promise<Fulfillme
       }
     }
 
-    // 5. Generate digital code
+    // 4. Try to claim the redemption atomically (optimistic update)
+    const updated = await prisma.rewardRedemption.updateMany({
+      where: { id: redemptionId, deliveryStatus: { not: 'DELIVERED' } },
+      data: { deliveryStatus: 'PROCESSING' },
+    })
+
+    if (updated.count === 0) {
+      // Already delivered or being processed - fetch current state for idempotent response
+      const existing = await prisma.rewardRedemption.findUnique({
+        where: { id: redemptionId },
+      })
+      if (existing?.deliveryStatus === 'DELIVERED') {
+        logger.info('Redemption already fulfilled, returning idempotently', {
+          redemptionId,
+          rewardCode: existing.rewardCode,
+        })
+        return {
+          success: true,
+          deliveryCode: existing.rewardCode ?? undefined,
+          deliveryMethod: 'IN_APP',
+        }
+      }
+      return {
+        success: false,
+        deliveryMethod: 'IN_APP',
+        error: 'Already being processed',
+      }
+    }
+
+    // 5. Now safe to generate code and deliver
     const deliveryCode = generateDigitalCode(redemption.reward.name)
 
     // 6. Update RewardRedemption: set rewardCode, deliveredAt, status = DELIVERED

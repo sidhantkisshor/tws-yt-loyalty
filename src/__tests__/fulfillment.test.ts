@@ -10,6 +10,7 @@ vi.mock('@/lib/prisma', () => ({
       findUnique: vi.fn(),
       findMany: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
     },
   },
 }))
@@ -37,6 +38,7 @@ const mockPrisma = prisma as unknown as {
     findUnique: ReturnType<typeof vi.fn>
     findMany: ReturnType<typeof vi.fn>
     update: ReturnType<typeof vi.fn>
+    updateMany: ReturnType<typeof vi.fn>
   }
 }
 
@@ -103,6 +105,7 @@ describe('fulfillRedemption', () => {
   it('delivers and updates status for a pending digital redemption', async () => {
     const redemption = makeRedemption()
     mockPrisma.rewardRedemption.findUnique.mockResolvedValue(redemption)
+    mockPrisma.rewardRedemption.updateMany.mockResolvedValue({ count: 1 })
     mockPrisma.rewardRedemption.update.mockResolvedValue({
       ...redemption,
       deliveryStatus: 'DELIVERED',
@@ -114,6 +117,12 @@ describe('fulfillRedemption', () => {
     expect(result.deliveryCode).toBeDefined()
     expect(result.deliveryCode).toMatch(/^[A-Z0-9]{1,6}-[A-Z0-9]{12}$/)
     expect(result.deliveryMethod).toBe('IN_APP')
+
+    // Should have called updateMany to atomically claim the redemption
+    expect(mockPrisma.rewardRedemption.updateMany).toHaveBeenCalledWith({
+      where: { id: 'redemption-1', deliveryStatus: { not: 'DELIVERED' } },
+      data: { deliveryStatus: 'PROCESSING' },
+    })
 
     expect(mockPrisma.rewardRedemption.update).toHaveBeenCalledWith({
       where: { id: 'redemption-1' },
@@ -132,13 +141,15 @@ describe('fulfillRedemption', () => {
       deliveredAt: new Date(),
     })
     mockPrisma.rewardRedemption.findUnique.mockResolvedValue(redemption)
+    // updateMany returns 0 because deliveryStatus is already DELIVERED
+    mockPrisma.rewardRedemption.updateMany.mockResolvedValue({ count: 0 })
 
     const result = await fulfillRedemption('redemption-1')
 
     expect(result.success).toBe(true)
     expect(result.deliveryCode).toBe('PREMI-ABC123DEF456')
     expect(result.deliveryMethod).toBe('IN_APP')
-    // Should NOT call update
+    // Should NOT call update (single)
     expect(mockPrisma.rewardRedemption.update).not.toHaveBeenCalled()
   })
 
@@ -181,6 +192,7 @@ describe('fulfillRedemption', () => {
   it('sets status to FAILED on database error and returns error', async () => {
     const redemption = makeRedemption()
     mockPrisma.rewardRedemption.findUnique.mockResolvedValue(redemption)
+    mockPrisma.rewardRedemption.updateMany.mockResolvedValue({ count: 1 })
     mockPrisma.rewardRedemption.update
       .mockRejectedValueOnce(new Error('Database connection lost'))
       .mockResolvedValueOnce({}) // For the FAILED status update
@@ -202,6 +214,7 @@ describe('fulfillRedemption', () => {
   it('processes FAILED status redemptions for retry', async () => {
     const redemption = makeRedemption({ deliveryStatus: 'FAILED' })
     mockPrisma.rewardRedemption.findUnique.mockResolvedValue(redemption)
+    mockPrisma.rewardRedemption.updateMany.mockResolvedValue({ count: 1 })
     mockPrisma.rewardRedemption.update.mockResolvedValue({
       ...redemption,
       deliveryStatus: 'DELIVERED',
@@ -228,6 +241,7 @@ describe('retryFailedFulfillments', () => {
     // Mock individual fulfillment calls
     const failedRedemption = makeRedemption({ deliveryStatus: 'FAILED' })
     mockPrisma.rewardRedemption.findUnique.mockResolvedValue(failedRedemption)
+    mockPrisma.rewardRedemption.updateMany.mockResolvedValue({ count: 1 })
     mockPrisma.rewardRedemption.update.mockResolvedValue({
       ...failedRedemption,
       deliveryStatus: 'DELIVERED',
@@ -274,6 +288,7 @@ describe('retryFailedFulfillments', () => {
       .mockResolvedValueOnce(null) // Not found
       .mockResolvedValueOnce(makeRedemption({ id: 'fail-3', deliveryStatus: 'FAILED' }))
 
+    mockPrisma.rewardRedemption.updateMany.mockResolvedValue({ count: 1 })
     mockPrisma.rewardRedemption.update.mockResolvedValue({
       deliveryStatus: 'DELIVERED',
     })

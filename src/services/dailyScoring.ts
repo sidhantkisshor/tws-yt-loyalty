@@ -240,13 +240,6 @@ export async function runDailyScoring(
 
         if (totalBasePoints === 0) continue
 
-        // Apply channel multiplier
-        const multipliedPoints = applyChannelMultiplier(
-          totalBasePoints,
-          scoring.channelIds,
-          fullConfig.channelMultipliers
-        )
-
         // Run batch anti-cheat
         const fraudFlags = runBatchAntiCheat(fanId, fanEvents, fanProfile)
 
@@ -276,16 +269,10 @@ export async function runDailyScoring(
           }
         }
 
-        // Apply fraud penalty
-        const finalPoints = applyFraudPenalty(multipliedPoints, fraudFlags)
-
-        if (finalPoints <= 0) continue
-
-        // Create PointLedger entries
-        const currentBalance = fanProfile.totalPoints
-
-        // Distribute points by type
-        const chatCommentPoints = applyFraudPenalty(
+        // Apply channel multiplier and fraud penalty per-category (bottom-up)
+        // This ensures the sum of per-category penalized amounts equals finalPoints exactly,
+        // avoiding rounding desync between totalPoints and availablePoints.
+        const chatCommentPenalized = applyFraudPenalty(
           applyChannelMultiplier(
             basePoints.chatPoints + basePoints.commentPoints,
             scoring.channelIds,
@@ -293,7 +280,7 @@ export async function runDailyScoring(
           ),
           fraudFlags
         )
-        const superChatFinal = applyFraudPenalty(
+        const superChatPenalized = applyFraudPenalty(
           applyChannelMultiplier(
             basePoints.superChatPoints,
             scoring.channelIds,
@@ -301,7 +288,7 @@ export async function runDailyScoring(
           ),
           fraudFlags
         )
-        const attendanceFinal = applyFraudPenalty(
+        const attendancePenalized = applyFraudPenalty(
           applyChannelMultiplier(
             basePoints.attendancePoints,
             scoring.channelIds,
@@ -310,50 +297,65 @@ export async function runDailyScoring(
           fraudFlags
         )
 
-        let runningBalance = currentBalance
+        // finalPoints is the sum of individually-penalized categories (bottom-up)
+        const finalPoints = chatCommentPenalized + superChatPenalized + attendancePenalized
 
-        // Create ledger entries for each type of points earned
-        const ledgerEntries: {
-          type: TransactionType
-          amount: number
-        }[] = []
+        if (finalPoints <= 0) continue
 
-        if (chatCommentPoints > 0) {
-          ledgerEntries.push({ type: 'CHAT_ACTIVITY', amount: chatCommentPoints })
-        }
-        if (superChatFinal > 0) {
-          ledgerEntries.push({ type: 'SUPER_CHAT_BONUS', amount: superChatFinal })
-        }
-        if (attendanceFinal > 0) {
-          ledgerEntries.push({ type: 'ATTENDANCE_BONUS', amount: attendanceFinal })
-        }
+        // Wrap ledger creates + profile update in a transaction for atomicity
+        await prisma.$transaction(async (tx) => {
+          // Read current FanProfile inside transaction for consistent balance
+          const currentProfile = await tx.fanProfile.findUnique({
+            where: { id: fanId },
+          })
 
-        for (const entry of ledgerEntries) {
-          const balanceBefore = runningBalance
-          runningBalance += entry.amount
+          if (!currentProfile) return
 
-          await prisma.pointLedger.create({
+          let runningBalance = currentProfile.totalPoints
+
+          // Create ledger entries for each type of points earned
+          const ledgerEntries: {
+            type: TransactionType
+            amount: number
+          }[] = []
+
+          if (chatCommentPenalized > 0) {
+            ledgerEntries.push({ type: 'CHAT_ACTIVITY', amount: chatCommentPenalized })
+          }
+          if (superChatPenalized > 0) {
+            ledgerEntries.push({ type: 'SUPER_CHAT_BONUS', amount: superChatPenalized })
+          }
+          if (attendancePenalized > 0) {
+            ledgerEntries.push({ type: 'ATTENDANCE_BONUS', amount: attendancePenalized })
+          }
+
+          for (const entry of ledgerEntries) {
+            const balanceBefore = runningBalance
+            runningBalance += entry.amount
+
+            await tx.pointLedger.create({
+              data: {
+                fanProfileId: fanId,
+                type: entry.type,
+                amount: entry.amount,
+                balanceBefore,
+                balanceAfter: runningBalance,
+                description: `Daily scoring: ${entry.type} (${windowStart.toISOString().split('T')[0]})`,
+                referenceType: 'DAILY_SCORING',
+              },
+            })
+          }
+
+          // Update FanProfile totals - finalPoints equals sum of ledger entries
+          await tx.fanProfile.update({
+            where: { id: fanId },
             data: {
-              fanProfileId: fanId,
-              type: entry.type,
-              amount: entry.amount,
-              balanceBefore,
-              balanceAfter: runningBalance,
-              description: `Daily scoring: ${entry.type} (${windowStart.toISOString().split('T')[0]})`,
-              referenceType: 'DAILY_SCORING',
+              totalPoints: runningBalance,
+              availablePoints: { increment: finalPoints },
+              lifetimePoints: { increment: finalPoints },
             },
           })
-        }
-
-        // Update FanProfile totals
-        await prisma.fanProfile.update({
-          where: { id: fanId },
-          data: {
-            totalPoints: runningBalance,
-            availablePoints: { increment: finalPoints },
-            lifetimePoints: { increment: finalPoints },
-          },
-        })
+        }, { isolationLevel: 'ReadCommitted' })
 
         fansScored++
         totalPointsAwarded += finalPoints

@@ -404,12 +404,12 @@ export async function acquireLock(
 }
 
 export async function releaseLock(key: string, lockId: string): Promise<boolean> {
-  const currentValue = await redis.get(`lock:${key}`)
-  if (currentValue === lockId) {
-    await redis.del(`lock:${key}`)
-    return true
-  }
-  return false
+  const result = await redis.eval(
+    `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end`,
+    [`lock:${key}`],
+    [lockId]
+  )
+  return result === 1
 }
 
 export async function isLocked(key: string): Promise<boolean> {

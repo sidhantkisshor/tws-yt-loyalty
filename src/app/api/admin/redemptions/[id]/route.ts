@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import {
+  requireAdmin,
   isValidStatusTransition,
   writeAuditLog,
   getClientIP,
@@ -18,14 +17,14 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const adminAuth = await requireAdmin()
+    if (!adminAuth.authorized) {
+      return adminAuth.response
     }
 
     // Rate limit check
     const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'anonymous'
-    const identifier = getRateLimitIdentifier(session.user.id, ip)
+    const identifier = getRateLimitIdentifier(adminAuth.userId, ip)
     const rateLimit = await checkRateLimit(adminReadLimiter, identifier)
 
     if (!rateLimit.success) {
@@ -65,7 +64,7 @@ export async function GET(
     }
 
     // Verify ownership
-    if (redemption.reward.channel.ownerId !== session.user.id) {
+    if (redemption.reward.channel.ownerId !== adminAuth.userId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -85,14 +84,14 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const adminAuth = await requireAdmin()
+    if (!adminAuth.authorized) {
+      return adminAuth.response
     }
 
     // Rate limit check
     const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'anonymous'
-    const identifier = getRateLimitIdentifier(session.user.id, ip)
+    const identifier = getRateLimitIdentifier(adminAuth.userId, ip)
     const rateLimit = await checkRateLimit(adminWriteLimiter, identifier)
 
     if (!rateLimit.success) {
@@ -126,7 +125,7 @@ export async function PATCH(
     }
 
     // Verify ownership
-    if (existing.reward.channel.ownerId !== session.user.id) {
+    if (existing.reward.channel.ownerId !== adminAuth.userId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -205,7 +204,7 @@ export async function PATCH(
 
     // Write audit log
     await writeAuditLog({
-      userId: session.user.id,
+      userId: adminAuth.userId,
       entityType: 'RewardRedemption',
       entityId: id,
       action: 'UPDATE',

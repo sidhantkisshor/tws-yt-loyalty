@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { fulfillRedemption } from '@/services/fulfillment'
-import { writeAuditLog, getClientIP } from '@/lib/admin'
+import { requireAdmin, writeAuditLog, getClientIP } from '@/lib/admin'
 import { logger } from '@/lib/logger'
 
 // POST /api/admin/redemptions/[id]/fulfill
@@ -13,9 +11,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const adminAuth = await requireAdmin()
+    if (!adminAuth.authorized) {
+      return adminAuth.response
     }
 
     const { id } = await params
@@ -36,7 +34,7 @@ export async function POST(
       return NextResponse.json({ error: 'Redemption not found' }, { status: 404 })
     }
 
-    if (redemption.reward.channel.ownerId !== session.user.id) {
+    if (redemption.reward.channel.ownerId !== adminAuth.userId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -45,7 +43,7 @@ export async function POST(
 
     // Write audit log
     await writeAuditLog({
-      userId: session.user.id,
+      userId: adminAuth.userId,
       entityType: 'RewardRedemption',
       entityId: id,
       action: 'MANUAL_FULFILL',
