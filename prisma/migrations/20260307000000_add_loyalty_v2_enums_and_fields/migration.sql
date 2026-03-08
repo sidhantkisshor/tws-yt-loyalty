@@ -27,8 +27,8 @@ UPDATE "RewardConfig" SET "minRank" = 'SWING_TRADER' WHERE "minRank" = 'SNIPER';
 UPDATE "RewardConfig" SET "minRank" = 'FUND_MANAGER' WHERE "minRank" = 'ARCHITECT';
 UPDATE "RewardConfig" SET "minRank" = 'MARKET_MAKER' WHERE "minRank" = 'INNER_CIRCLE';
 
--- Drop old enum and rename new one
-DROP TYPE "ViewerRank";
+-- Drop old enum (CASCADE to remove default dependency) and rename new one
+DROP TYPE "ViewerRank" CASCADE;
 ALTER TYPE "ViewerRank_new" RENAME TO "ViewerRank";
 
 -- Cast columns back to the enum type

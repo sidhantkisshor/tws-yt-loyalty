@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { pollLiveChatMessages } from '@/lib/youtube'
 import { processMessage } from '@/services/messageProcessor'
-import { setStreamState } from '@/lib/redis'
+import { setStreamState, acquireLock, releaseLock } from '@/lib/redis'
 import { env } from '@/lib/env'
 import { logger } from '@/lib/logger'
 import { getValidCredentials } from '@/services/tokenManager'
+import { startJob, completeJob, failJob } from '@/services/jobTracker'
 
 // Verify cron secret to prevent unauthorized access
 const CRON_SECRET = env.CRON_SECRET
@@ -32,6 +33,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  // Acquire distributed lock to prevent concurrent execution
+  const lockId = await acquireLock('cron:poll-streams', 120)
+  if (!lockId) {
+    return NextResponse.json({ error: 'Already running' }, { status: 409 })
+  }
+
+  const ctx = await startJob('INGEST_CHAT')
+
   try {
     // Get all live streams with polling enabled
     const liveStreams = await prisma.stream.findMany({
@@ -48,6 +57,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     })
 
     if (liveStreams.length === 0) {
+      await completeJob(ctx)
       return NextResponse.json({
         message: 'No active streams to poll',
         results: [],
@@ -72,6 +82,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           logger.warn('No valid credentials for channel, skipping stream', { channelId: stream.channel.id, streamId: stream.id })
           result.error = 'No valid credentials'
           results.push(result)
+          ctx.errorsCount++
           continue
         }
 
@@ -81,6 +92,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         if (quotaRemaining < 10) {
           result.error = 'Quota exhausted'
           results.push(result)
+          ctx.errorsCount++
           continue
         }
 
@@ -101,10 +113,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
               message
             )
             result.messagesProcessed++
+            ctx.eventsProcessed++
             if (messageResult.codeRedeemed) result.codesRedeemed++
             result.pointsAwarded += messageResult.pointsAwarded
           } catch (error) {
             logger.error('Error processing message', error, { messageId: message.id, streamId: stream.id })
+            ctx.errorsCount++
           }
         }
 
@@ -136,22 +150,29 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       } catch (error) {
         result.error = error instanceof Error ? error.message : 'Unknown error'
         logger.error('Error polling stream', error, { streamId: stream.id })
+        ctx.errorsCount++
       }
 
       results.push(result)
     }
 
+    await completeJob(ctx)
+
     return NextResponse.json({
       message: `Polled ${liveStreams.length} streams`,
       results,
+      jobRunId: ctx.jobRunId,
       timestamp: new Date().toISOString(),
     })
   } catch (error) {
+    await failJob(ctx, error instanceof Error ? error.message : 'Unknown error')
     logger.error('Cron poll error', error)
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Cron poll failed' },
       { status: 500 }
     )
+  } finally {
+    await releaseLock('cron:poll-streams', lockId)
   }
 }
 
