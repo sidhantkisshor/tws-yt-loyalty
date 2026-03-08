@@ -2,9 +2,157 @@
 
 Core business logic lives in `src/services/` and `src/lib/`. This document explains each service's purpose, algorithms, and configuration.
 
+## Token Manager (`src/services/tokenManager.ts`)
+
+Manages per-channel OAuth token lifecycle. Each channel stores its own Google OAuth credentials in `ChannelCredential`.
+
+### Key Functions
+
+| Function | Purpose |
+|----------|---------|
+| `refreshChannelToken(channelId)` | Exchanges refresh token for new access token via Google OAuth |
+| `getValidCredentials(channelId)` | Returns valid credentials, auto-refreshing if within 5-minute expiry buffer |
+| `checkAllChannelHealth()` | Iterates all channels, attempts refresh on expiring tokens, returns health summary |
+| `isTokenExpired(expiresAt)` | True if token is past expiry |
+| `shouldRefreshToken(expiresAt)` | True if token expires within 5 minutes |
+
+### Token Status Flow
+
+```
+VALID → (expiry approaching) → auto-refresh → VALID
+VALID → (refresh fails: invalid_grant) → REVOKED
+VALID → (refresh fails: other) → remains VALID (retry next cycle)
+EXPIRED → (no refresh token) → REVOKED
+```
+
+On `invalid_grant`, the credential is marked `REVOKED` and the channel owner must reconnect via the OAuth flow.
+
+---
+
+## Job Tracker (`src/services/jobTracker.ts`)
+
+Records cron job execution lifecycle in the `JobRun` table.
+
+### Interface
+
+```typescript
+startJob(jobType, channelId?, metadata?) → JobContext { jobRunId, eventsProcessed, errorsCount }
+completeJob(ctx)    → sets status=COMPLETED, records counts
+failJob(ctx, error) → sets status=FAILED, records error message
+```
+
+Workers increment `ctx.eventsProcessed` and `ctx.errorsCount` during execution. The ops monitoring dashboard queries `JobRun` for health metrics and failure trends.
+
+---
+
+## Batch Anti-Cheat (`src/services/batchAntiCheat.ts`)
+
+Runs fraud analysis on daily event batches. Separate from real-time fraud detection (which handles redemption-time checks).
+
+### Rules
+
+| Rule | Trigger | Severity | Point Penalty | Trust Penalty |
+|------|---------|----------|---------------|---------------|
+| Velocity anomaly | >100 messages in any 1-hour window | HIGH | 50% | -15 |
+| Duplicate text | >60% of messages are identical (min 5 msgs) | MEDIUM | 30% | -10 |
+| Timing patterns | Message interval stddev < 500ms over 20+ messages | HIGH | 50% | -20 |
+| Rapid account | Account < 24h old with > 50 events | LOW | 20% | -5 |
+
+`runBatchAntiCheat(fanProfileId, events, fanProfile)` runs all four rules and returns an array of `FraudFlag` objects. The daily scoring engine uses the highest penalty percentage among all flags.
+
+---
+
+## Daily Scoring (`src/services/dailyScoring.ts`)
+
+Core scoring engine that processes `EngagementEvent` records in batch, calculates points, runs anti-cheat, and creates `PointLedger` entries.
+
+### Scoring Config
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `chatPointsPerMessage` | 1 | Points per chat message |
+| `chatDailyCap` | 50 | Max chat points per day |
+| `commentPointsPerComment` | 2 | Points per video comment |
+| `commentDailyCap` | 20 | Max comment points per day |
+| `superChatMultiplier` | 0.1 | 10% of super chat amount in cents |
+| `attendancePoints` | 5 | Points per stream attended |
+| `channelMultipliers` | {} | Per-channel point multiplier (default 1.0) |
+
+### Pipeline
+
+1. **Window calculation**: Finds the last successful `DAILY_SCORING` JobRun's completion time. Events between that time and now are in scope.
+2. **Event aggregation**: Groups `EngagementEvent` records by `fanProfileId`.
+3. **Base points**: Calculates per-type points with daily caps.
+4. **Anti-cheat**: Runs `batchAntiCheat` on each fan's events. Creates `FraudEvent` records for flagged behavior.
+5. **Multipliers**: Applies channel multiplier (averaged across channels) and fraud penalty (highest %).
+6. **Settlement**: Creates `PointLedger` entries and updates `FanProfile` totals in a `ReadCommitted` transaction. Fans are processed in batches of 500.
+
+---
+
+## Fulfillment (`src/services/fulfillment.ts`)
+
+Handles digital reward delivery.
+
+### `fulfillRedemption(redemptionId)`
+
+1. Loads the `RewardRedemption` with its reward config
+2. Skips non-digital and cancelled redemptions
+3. Atomically claims the redemption via `updateMany` with `deliveryStatus != DELIVERED` filter
+4. Generates a unique code: `{PREFIX}-{UUID_SEGMENT}` (e.g., `REWARD-A1B2C3D4E5F6`)
+5. Updates status to `DELIVERED` with `deliveredAt` timestamp
+
+Idempotent: re-processing an already-delivered redemption returns the existing code. On failure, status is set to `FAILED` with error in `adminNotes`.
+
+### `retryFailedFulfillments()`
+
+Finds up to 100 `FAILED` digital redemptions (oldest first) and re-runs `fulfillRedemption` on each.
+
+---
+
+## Ops Monitor (`src/services/opsMonitor.ts`)
+
+Provides system health metrics and alert generation for the admin ops dashboard.
+
+### `getSystemHealth()`
+
+Runs six checks in parallel:
+
+| Check | Metrics |
+|-------|---------|
+| Database | Latency (ms), status (healthy/degraded/down) |
+| Redis | Latency (ms), status |
+| Channels | Token counts by status (VALID/EXPIRED/REVOKED) |
+| Jobs | Failure count (24h), avg duration, last run per job type |
+| Ingestion | Lag (minutes since last ingest), events in last 24h and last hour |
+| Quota | YouTube API daily usage vs limit |
+
+### `generateAlerts()`
+
+Produces alerts based on thresholds:
+
+| Condition | Severity |
+|-----------|----------|
+| Ingestion lag > 2 hours | CRITICAL |
+| Ingestion lag > 30 min | WARNING |
+| Job failures in last hour | WARNING |
+| Expired channel tokens | WARNING |
+| Revoked channel tokens | WARNING |
+| YouTube quota > 95% | CRITICAL |
+| YouTube quota > 80% | WARNING |
+| Database unreachable | CRITICAL |
+| Database latency > 1000ms | WARNING |
+| Redis unreachable | CRITICAL |
+| Redis latency > 500ms | WARNING |
+
+### `getJobHistory(days)`
+
+Returns up to 500 `JobRun` records from the last N days with type, status, timing, and error information.
+
+---
+
 ## Fraud Detection (`src/services/fraudDetection.ts`)
 
-The fraud detection system uses a **trust score** model (0-100) rather than binary allow/deny.
+The real-time fraud detection system uses a **trust score** model (0-100) rather than binary allow/deny.
 
 ### Trust Score Calculation
 
@@ -40,6 +188,8 @@ Events start as `PENDING` and can be moved to:
 - **FALSE_POSITIVE** - Not fraud, trust restored
 - **ESCALATED** - Needs deeper investigation
 
+The `fraud-scan` cron auto-confirms events based on: trust score < 20, CRITICAL severity, or 3+ HIGH severity events per viewer. Auto-confirmed events trigger point reversals and potential bans.
+
 ---
 
 ## Bonus Calculator (`src/services/bonusCalculator.ts`)
@@ -51,25 +201,11 @@ Calculates all point bonuses applied on top of base code values.
 | Bonus | Value | Condition |
 |-------|-------|-----------|
 | Streak bonus | +10% per consecutive stream (max +50%) | Must attend consecutive streams |
-| Rank bonus | 0% to +50% based on rank | See rank table below |
+| Rank bonus | 0% to +50% based on rank | See rank table |
 | Early bird | +25 points | Join within first 5 minutes |
 | Full stream | +100 points | Attend from start to end |
 | Member bonus | Configurable per code | YouTube channel member |
 | Moderator bonus | Configurable per code | Channel moderator |
-
-### Rank Earning Boosts
-
-| Rank | Boost |
-|------|-------|
-| Paper Trader | 0% |
-| Retail Trader | +10% |
-| Swing Trader | +20% |
-| Fund Manager | +35% |
-| Market Maker | +50% |
-| Hedge Fund | +50% |
-| Whale | +50% |
-
-The calculator returns a detailed breakdown object showing each bonus applied and the final total.
 
 ---
 
@@ -93,7 +229,7 @@ Tracks consecutive stream attendance.
 - Missing a stream resets `currentStreak` to 0
 - `longestStreak` records the all-time best
 - Streak milestones (e.g., 5, 10, 25, 50) award bonus points via `STREAK_MILESTONE` transactions
-- Viewers can purchase **streak pauses** to protect their streak when they can't attend
+- Viewers can purchase **streak pauses** to protect their streak
 
 ---
 
@@ -130,7 +266,7 @@ Assigns viewers to segments for analytics and A/B testing.
 
 ### Segmentation Criteria
 - Based on engagement metrics (points, streams attended, messages)
-- Updated daily via cron job
+- Updated periodically via cron job (every 6 hours)
 - Used for targeted analytics and feature experimentation
 
 ---
@@ -158,6 +294,11 @@ Redis is used extensively for hot data that needs fast access.
 - `getStreamLeaderboard(streamId, limit)` - top N for a stream
 - `getChannelLeaderboard(channelId, limit)` - top N for a channel
 - `getViewerRank(channelId, viewerId)` - viewer's position
+
+### Distributed Locks
+- `acquireLock(key, ttlSeconds)` - SET NX EX, returns lock ID or null
+- `releaseLock(key, lockId)` - Lua atomic compare-and-delete
+- `isLocked(key)` - check if lock exists
 
 ### Active Codes
 - `setActiveCode(streamId, code)` - store currently active code
@@ -195,6 +336,8 @@ Wrapper around the Google YouTube Data API v3.
 | `postLiveChatMessage(chatId, message)` | 50 units | None |
 | `getChannelInfo()` | 1 unit | None |
 | `getVideoInfo(videoId)` | 1 unit | 5 minutes |
+| `searchChannelVideos(channelId, creds, since)` | 100 units | None |
+| `getVideoComments(videoId, creds, pageToken)` | 1 unit | None |
 | `checkQuotaAvailable(channelId)` | 0 | None |
 | `extractVideoId(url)` | 0 | None |
 
@@ -202,6 +345,7 @@ Wrapper around the Google YouTube Data API v3.
 - Default daily limit: 10,000 units (configurable via `YOUTUBE_DAILY_QUOTA_LIMIT`)
 - Most polling uses 1 unit per call
 - Code announcements cost 50 units each
+- Video search costs 100 units per call
 - Quota resets daily at midnight Pacific Time
 
 ---

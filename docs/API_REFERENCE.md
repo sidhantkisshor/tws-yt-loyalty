@@ -16,6 +16,19 @@ All API routes are under `/api/`. Admin endpoints require a valid NextAuth sessi
 
 ---
 
+## Channel Management
+
+Admin auth required.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/channels/connect` | Initiate per-channel OAuth flow. Builds HMAC-signed state and redirects to Google OAuth. Query: `?channelId=xxx` for reconnect. |
+| GET | `/api/channels/oauth/callback` | OAuth callback. Exchanges code for tokens, verifies HMAC state signature, creates Channel + ChannelCredential + Workspace. Redirects to admin UI. |
+| POST | `/api/channels/[channelId]/disconnect` | Deactivates a channel (`isActive=false`). Requires channel ownership. |
+| GET | `/api/channels/[channelId]/health` | Returns token health: status, expiry, last refresh. Auto-refreshes if expiring within 5 minutes. |
+
+---
+
 ## Streams
 
 All stream endpoints require admin auth.
@@ -58,6 +71,7 @@ All require viewer auth.
 |--------|----------|-------------|
 | GET | `/api/viewer/me` | Current viewer profile (points, rank, stats) |
 | GET | `/api/viewer/channels` | Channels the viewer participates in |
+| GET | `/api/viewer/channel-breakdown` | Per-channel point contributions with global wallet totals |
 | GET | `/api/viewer/transactions` | Point transaction history (paginated) |
 | POST | `/api/viewer/redeem` | Redeem a reward |
 | GET | `/api/viewer/redemptions` | Viewer's reward redemption history |
@@ -80,6 +94,7 @@ All require admin auth.
 | GET | `/api/admin/analytics/funnel` | Conversion funnel data |
 | GET | `/api/admin/redemptions` | All reward redemptions (for fulfillment) |
 | PUT | `/api/admin/redemptions` | Update redemption status (ship, deliver, cancel) |
+| POST | `/api/admin/redemptions/[id]/fulfill` | Manually trigger digital fulfillment for a specific redemption |
 | GET | `/api/admin/rewards/[id]` | Admin reward details |
 | PUT | `/api/admin/rewards/[id]` | Update reward |
 | DELETE | `/api/admin/rewards/[id]` | Delete reward |
@@ -87,6 +102,14 @@ All require admin auth.
 | PUT | `/api/admin/homework/[id]` | Grade homework (approve/reject) |
 | GET | `/api/admin/webhooks` | List webhook configs |
 | POST | `/api/admin/webhooks` | Create webhook config |
+
+### Operations Monitoring
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/admin/ops/health` | System health: DB/Redis latency, channel token status, job stats, ingestion lag, quota usage |
+| GET | `/api/admin/ops/jobs` | Job run history with per-type summaries. Query: `?days=7` (1-90) |
+| GET | `/api/admin/ops/alerts` | Active alerts with severity (WARNING/CRITICAL) and category |
 
 ---
 
@@ -104,13 +127,19 @@ All require admin auth.
 
 ## Cron Jobs
 
-Protected by `Authorization: Bearer <CRON_SECRET>` header.
+Protected by `Authorization: Bearer <CRON_SECRET>` header. Most use distributed locks (returns 409 if already running).
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/cron/poll-streams` | Polls YouTube Live Chat for all active streams |
-| POST | `/api/cron/tier-decay` | Decays inactive viewer ranks |
-| POST | `/api/cron/update-segments` | Recalculates viewer segments |
+| Method | Endpoint | Schedule | Lock TTL | Description |
+|--------|----------|----------|----------|-------------|
+| GET | `/api/cron/poll-streams` | `*/3 * * * *` | - | Polls YouTube Live Chat for all active streams |
+| GET | `/api/cron/ingest-comments` | `*/15 * * * *` | 300s | Fetches video comments for recent streams, creates EngagementEvents |
+| GET | `/api/cron/discover-videos` | `0 */4 * * *` | 120s | Discovers new videos per channel (last 24h), creates Stream records |
+| GET | `/api/cron/daily-scoring` | `0 2 * * *` | 600s | Processes EngagementEvents, runs anti-cheat, creates PointLedger entries |
+| GET | `/api/cron/fraud-scan` | `0 3 * * *` | 300s | Auto-confirms fraud events, creates point reversals, auto-bans |
+| GET | `/api/cron/fulfill-rewards` | `*/5 * * * *` | 300s | Delivers pending digital rewards, retries failed |
+| GET | `/api/cron/token-health` | `0 */1 * * *` | - | Checks and refreshes expiring channel OAuth tokens |
+| GET | `/api/cron/tier-decay` | `0 0 * * *` | - | Decays inactive viewer ranks |
+| GET | `/api/cron/update-segments` | `0 */6 * * *` | - | Recalculates viewer segments |
 
 ---
 
