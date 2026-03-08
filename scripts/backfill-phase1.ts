@@ -1,7 +1,15 @@
 import { PrismaClient } from '@prisma/client'
+import { PrismaPg } from '@prisma/adapter-pg'
+import { Pool } from 'pg'
+import { config } from 'dotenv'
 import { aggregateViewerPoints, pickHighestRank, averageTrustScore } from '../src/scripts/backfillHelpers'
 
-const prisma = new PrismaClient()
+// Load .env.local for database URL
+config({ path: '.env.local' })
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 3 })
+const adapter = new PrismaPg(pool)
+const prisma = new PrismaClient({ adapter })
 
 async function main() {
   console.log('=== Phase 1 Backfill: Identity + Ledger ===\n')
@@ -10,14 +18,16 @@ async function main() {
   console.log('Step 1: Creating default workspace...')
   const firstUser = await prisma.user.findFirst()
   if (!firstUser) {
-    console.log('  No users found — creating workspace with placeholder owner')
+    console.log('  No users found — skipping backfill (empty database)')
+    console.log('\n=== Backfill complete (nothing to migrate) ===')
+    return
   }
   const workspace = await prisma.workspace.upsert({
     where: { slug: 'default' },
     create: {
       name: 'YT Loyalty Program',
       slug: 'default',
-      ownerId: firstUser?.id ?? '',
+      ownerId: firstUser.id,
       settings: { timezone: 'UTC' },
     },
     update: {},
