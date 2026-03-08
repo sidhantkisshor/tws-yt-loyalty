@@ -68,6 +68,15 @@ export async function GET(request: NextRequest) {
         channel: {
           select: { title: true },
         },
+        fanProfile: {
+          select: {
+            totalPoints: true,
+            availablePoints: true,
+            lifetimePoints: true,
+            rank: true,
+            trustScore: true,
+          },
+        },
         _count: {
           select: {
             codeRedemptions: true,

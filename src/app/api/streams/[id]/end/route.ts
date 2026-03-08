@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { updateViewerStreaks, awardFullStreamBonuses } from '@/services/bonusCalculator'
 import { awardWatchTimePointsForStream } from '@/services/watchTimeTracker'
+import { dispatchWebhooks } from '@/services/webhookDispatcher'
 import { adminWriteLimiter, getRateLimitIdentifier, checkRateLimit } from '@/lib/rateLimits'
 import { logger } from '@/lib/logger'
 
@@ -88,6 +89,25 @@ export async function POST(
       awardFullStreamBonuses(streamId),
       awardWatchTimePointsForStream(streamId),
     ])
+
+    // Dispatch stream.ended webhook
+    dispatchWebhooks(stream.channelId, 'stream.ended', {
+      streamId: updatedStream.id,
+      channelId: stream.channelId,
+      title: stream.title,
+      endedAt: updatedStream.endedAt,
+      stats: {
+        uniqueChatters: stats._count.viewerId,
+        totalPointsAwarded: stats._sum.pointsEarned || 0,
+        totalCodesRedeemed: stats._sum.codesRedeemed || 0,
+        streakUpdates,
+        fullStreamBonuses,
+        watchTimePoints: watchTimeResults.totalPointsAwarded,
+        watchTimeViewers: watchTimeResults.viewersAwarded,
+      },
+    }).catch((err) => {
+      logger.error('Failed to dispatch stream.ended webhook', err as Error, { streamId })
+    })
 
     return NextResponse.json({
       message: 'Stream ended successfully',

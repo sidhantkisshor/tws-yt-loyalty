@@ -1,8 +1,5 @@
 'use client'
 
-// TODO: Add multi-channel support for Admins. Currently defaults to looking up viewers globally or by manual ID.
-// If an Admin owns multiple channels, they should be able to filter/select context here.
-
 import { useState } from 'react'
 
 interface Viewer {

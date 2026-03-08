@@ -1,6 +1,7 @@
 import prisma from '@/lib/prisma'
 import { logger } from '@/lib/logger'
 import { randomUUID } from 'crypto'
+import { dispatchWebhooks } from '@/services/webhookDispatcher'
 
 // ============================================
 // TYPES
@@ -49,6 +50,13 @@ export async function fulfillRedemption(redemptionId: string): Promise<Fulfillme
             id: true,
             name: true,
             rewardType: true,
+            channelId: true,
+          },
+        },
+        viewer: {
+          select: {
+            id: true,
+            displayName: true,
           },
         },
       },
@@ -126,6 +134,18 @@ export async function fulfillRedemption(redemptionId: string): Promise<Fulfillme
       redemptionId,
       rewardId: redemption.reward.id,
       rewardName: redemption.reward.name,
+    })
+
+    // Dispatch webhook for reward redemption
+    dispatchWebhooks(redemption.reward.channelId, 'viewer.reward_redeemed', {
+      redemptionId,
+      viewerId: redemption.viewer?.id,
+      viewerName: redemption.viewer?.displayName,
+      rewardId: redemption.reward.id,
+      rewardName: redemption.reward.name,
+      deliveryCode,
+    }).catch((err) => {
+      logger.error('Failed to dispatch reward_redeemed webhook', err as Error, { redemptionId })
     })
 
     return {

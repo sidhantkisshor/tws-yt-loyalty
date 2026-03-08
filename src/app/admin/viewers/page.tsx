@@ -8,6 +8,14 @@ interface Channel {
   title: string
 }
 
+interface FanProfileSummary {
+  totalPoints: number
+  availablePoints: number
+  lifetimePoints: number
+  rank: string
+  trustScore: number
+}
+
 interface Viewer {
   id: string
   displayName: string
@@ -22,6 +30,7 @@ interface Viewer {
   isModerator: boolean
   firstSeenAt: string
   lastSeenAt: string
+  fanProfile: FanProfileSummary | null
 }
 
 const RANK_COLORS: Record<string, string> = {
@@ -132,6 +141,7 @@ export default function AdminViewersPage() {
                   <th className="text-left px-4 py-3 text-sm font-medium text-gray-400">Viewer</th>
                   <th className="text-left px-4 py-3 text-sm font-medium text-gray-400">Rank</th>
                   <th className="text-right px-4 py-3 text-sm font-medium text-gray-400">Points</th>
+                  <th className="text-right px-4 py-3 text-sm font-medium text-gray-400">Global Points</th>
                   <th className="text-right px-4 py-3 text-sm font-medium text-gray-400">Trust</th>
                   <th className="text-right px-4 py-3 text-sm font-medium text-gray-400">Streak</th>
                   <th className="text-right px-4 py-3 text-sm font-medium text-gray-400">Streams</th>
@@ -151,7 +161,14 @@ export default function AdminViewersPage() {
                           </div>
                         )}
                         <div>
-                          <p className="text-white text-sm font-medium">{v.displayName}</p>
+                          <p className="text-white text-sm font-medium">
+                            {v.displayName}
+                            {v.fanProfile && (
+                              <span className="ml-1.5 text-[10px] px-1 py-0.5 bg-indigo-900 text-indigo-300 rounded" title="Linked FanProfile (cross-channel)">
+                                FP
+                              </span>
+                            )}
+                          </p>
                           <div className="flex gap-1">
                             {v.isMember && <span className="text-[10px] px-1.5 py-0.5 bg-green-600 rounded">Member</span>}
                             {v.isModerator && <span className="text-[10px] px-1.5 py-0.5 bg-blue-600 rounded">Mod</span>}
@@ -160,11 +177,27 @@ export default function AdminViewersPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`text-xs px-2 py-1 rounded ${RANK_COLORS[v.rank] || 'bg-gray-600'}`}>
-                        {v.rank.replace(/_/g, ' ')}
-                      </span>
+                      <div className="flex flex-col gap-1">
+                        <span className={`text-xs px-2 py-1 rounded w-fit ${RANK_COLORS[v.rank] || 'bg-gray-600'}`}>
+                          {v.rank.replace(/_/g, ' ')}
+                        </span>
+                        {v.fanProfile && v.fanProfile.rank !== v.rank && (
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded w-fit border border-dashed border-gray-500 ${RANK_COLORS[v.fanProfile.rank] || 'bg-gray-600'}`}>
+                            Global: {v.fanProfile.rank.replace(/_/g, ' ')}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-right text-sm text-white">{v.availablePoints.toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right text-sm">
+                      {v.fanProfile ? (
+                        <span className="text-indigo-300" title="Cross-channel global wallet">
+                          {v.fanProfile.totalPoints.toLocaleString()}
+                        </span>
+                      ) : (
+                        <span className="text-gray-600">--</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-right text-sm text-gray-400">{v.trustScore}</td>
                     <td className="px-4 py-3 text-right text-sm text-gray-400">{v.currentStreak}</td>
                     <td className="px-4 py-3 text-right text-sm text-gray-400">{v.totalStreamsAttended}</td>
