@@ -8,6 +8,7 @@ import { nanoid } from 'nanoid'
 import { z } from 'zod'
 import { adminReadLimiter, adminWriteLimiter, getRateLimitIdentifier, checkRateLimit } from '@/lib/rateLimits'
 import { logger } from '@/lib/logger'
+import { getValidCredentials } from '@/services/tokenManager'
 
 const createCodeSchema = z
   .object({
@@ -215,17 +216,9 @@ export async function POST(
 
     // Announce in chat if enabled
     if (data.announceInChat && stream.youtubeLiveChatId) {
-      const credential = await prisma.channelCredential.findUnique({
-        where: { channelId: stream.channel.id },
-      })
+      const credentials = await getValidCredentials(stream.channel.id)
 
-      if (credential?.accessToken && credential?.refreshToken) {
-        const credentials = {
-          accessToken: credential.accessToken,
-          refreshToken: credential.refreshToken,
-          expiresAt: credential.tokenExpiresAt ?? undefined,
-        }
-
+      if (credentials) {
         const message = formatCodeAnnouncement(code, data.basePoints, data.durationSeconds)
         await postLiveChatMessage(
           stream.youtubeLiveChatId,

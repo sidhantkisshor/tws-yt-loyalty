@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { pollLiveChatMessages, YouTubeCredentials } from '@/lib/youtube'
+import { pollLiveChatMessages } from '@/lib/youtube'
 import { processMessage } from '@/services/messageProcessor'
 import { setStreamState } from '@/lib/redis'
 import { env } from '@/lib/env'
 import { logger } from '@/lib/logger'
+import { getValidCredentials } from '@/services/tokenManager'
 
 // Verify cron secret to prevent unauthorized access
 const CRON_SECRET = env.CRON_SECRET
@@ -41,7 +42,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       },
       include: {
         channel: {
-          include: { channelCredential: true },
+          select: { id: true, title: true, quotaLimit: true, dailyQuotaUsed: true },
         },
       },
     })
@@ -66,9 +67,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       }
 
       try {
-        const credential = stream.channel.channelCredential
-        if (!credential?.accessToken || !credential?.refreshToken) {
-          result.error = 'No access token'
+        const credentials = await getValidCredentials(stream.channel.id)
+        if (!credentials) {
+          logger.warn('No valid credentials for channel, skipping stream', { channelId: stream.channel.id, streamId: stream.id })
+          result.error = 'No valid credentials'
           results.push(result)
           continue
         }
@@ -80,12 +82,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           result.error = 'Quota exhausted'
           results.push(result)
           continue
-        }
-
-        const credentials: YouTubeCredentials = {
-          accessToken: credential.accessToken,
-          refreshToken: credential.refreshToken,
-          expiresAt: credential.tokenExpiresAt ?? undefined,
         }
 
         // Poll YouTube chat

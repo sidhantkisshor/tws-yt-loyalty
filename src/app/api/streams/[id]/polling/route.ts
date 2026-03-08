@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/prisma'
-import { getLiveChatId, YouTubeCredentials } from '@/lib/youtube'
+import { getLiveChatId } from '@/lib/youtube'
 import { setStreamState, getStreamState } from '@/lib/redis'
 import { adminWriteLimiter, adminReadLimiter, getRateLimitIdentifier, checkRateLimit } from '@/lib/rateLimits'
 import { pollingActionSchema } from '@/lib/validators'
 import { z } from 'zod'
 import { logger } from '@/lib/logger'
+import { getValidCredentials } from '@/services/tokenManager'
 
 // Start or stop polling for a stream
 export async function POST(
@@ -43,7 +44,7 @@ export async function POST(
       where: { id: streamId },
       include: {
         channel: {
-          include: { channelCredential: true },
+          select: { id: true, ownerId: true },
         },
       },
     })
@@ -69,18 +70,12 @@ export async function POST(
       // Get live chat ID if not already set
       let liveChatId = stream.youtubeLiveChatId
       if (!liveChatId) {
-        const credential = stream.channel.channelCredential
-        if (!credential?.accessToken || !credential?.refreshToken) {
+        const credentials = await getValidCredentials(stream.channel.id)
+        if (!credentials) {
           return NextResponse.json(
-            { error: 'Channel OAuth credentials not configured' },
+            { error: 'Channel OAuth credentials not configured or expired' },
             { status: 401 }
           )
-        }
-
-        const credentials: YouTubeCredentials = {
-          accessToken: credential.accessToken,
-          refreshToken: credential.refreshToken,
-          expiresAt: credential.tokenExpiresAt ?? undefined,
         }
 
         liveChatId = await getLiveChatId(stream.youtubeVideoId, stream.channelId, credentials)

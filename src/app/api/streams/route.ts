@@ -6,6 +6,7 @@ import { extractVideoId, getVideoInfo } from '@/lib/youtube'
 import { z } from 'zod'
 import { adminReadLimiter, adminWriteLimiter, getRateLimitIdentifier, checkRateLimit } from '@/lib/rateLimits'
 import { logger } from '@/lib/logger'
+import { getValidCredentials } from '@/services/tokenManager'
 
 const createStreamSchema = z.object({
   channelId: z.string(),
@@ -135,23 +136,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get channel's OAuth credentials
-    const channelWithCred = await prisma.channel.findFirst({
-      where: { id: channelId, ownerId: session.user.id },
-      include: { channelCredential: true },
-    })
-
-    if (!channelWithCred?.channelCredential?.accessToken || !channelWithCred?.channelCredential?.refreshToken) {
+    // Get valid OAuth credentials (auto-refreshes if needed)
+    const credentials = await getValidCredentials(channelId)
+    if (!credentials) {
       return NextResponse.json(
         { error: 'Channel OAuth credentials not configured. Please reconnect your account.' },
         { status: 401 }
       )
-    }
-
-    const credentials = {
-      accessToken: channelWithCred.channelCredential.accessToken,
-      refreshToken: channelWithCred.channelCredential.refreshToken,
-      expiresAt: channelWithCred.channelCredential.tokenExpiresAt ?? undefined,
     }
 
     // Get video info from YouTube

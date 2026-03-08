@@ -35,6 +35,14 @@ export async function GET(request: NextRequest) {
             viewers: true,
           },
         },
+        channelCredential: {
+          select: {
+            googleAccountEmail: true,
+            tokenStatus: true,
+            tokenExpiresAt: true,
+            lastRefreshedAt: true,
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     })

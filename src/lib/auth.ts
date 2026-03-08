@@ -71,12 +71,17 @@ export const authOptions: NextAuthOptions = {
   },
   events: {
     async signIn({ user, account }) {
-      // Sync OAuth tokens to ChannelCredential for any channel owned by this user
+      // Sync OAuth tokens to ChannelCredential for all channels owned by this user
       if (account && user.id && account.access_token && account.refresh_token) {
-        const channel = await prisma.channel.findFirst({
+        const channels = await prisma.channel.findMany({
           where: { ownerId: user.id },
+          include: { channelCredential: true },
         })
-        if (channel) {
+        for (const channel of channels) {
+          // Only update if this channel uses the same Google account
+          if (channel.channelCredential && channel.channelCredential.googleAccountEmail !== user.email) {
+            continue // Skip channels connected via different Google accounts
+          }
           await prisma.channelCredential.upsert({
             where: { channelId: channel.id },
             update: {
@@ -159,20 +164,32 @@ async function refreshAccessToken(token: TokenWithRefresh): Promise<TokenWithRef
         },
       })
 
-      // Update ChannelCredential for any channel owned by this user
-      const channel = await prisma.channel.findFirst({
-        where: { ownerId: token.userId },
+      // Update ChannelCredential for all channels owned by this user
+      const userAccount = await prisma.account.findFirst({
+        where: { userId: token.userId, provider: 'google' },
+        include: { user: { select: { email: true } } },
       })
-      if (channel) {
-        await prisma.channelCredential.updateMany({
-          where: { channelId: channel.id },
-          data: {
-            accessToken: refreshedTokens.access_token,
-            tokenExpiresAt: new Date(Date.now() + refreshedTokens.expires_in * 1000),
-            tokenStatus: 'VALID',
-            lastRefreshedAt: new Date(),
-          },
-        })
+      const userEmail = userAccount?.user?.email
+      const channels = await prisma.channel.findMany({
+        where: { ownerId: token.userId },
+        include: { channelCredential: true },
+      })
+      for (const channel of channels) {
+        // Only update if this channel uses the same Google account
+        if (channel.channelCredential && userEmail && channel.channelCredential.googleAccountEmail !== userEmail) {
+          continue // Skip channels connected via different Google accounts
+        }
+        if (channel.channelCredential) {
+          await prisma.channelCredential.update({
+            where: { channelId: channel.id },
+            data: {
+              accessToken: refreshedTokens.access_token,
+              tokenExpiresAt: new Date(Date.now() + refreshedTokens.expires_in * 1000),
+              tokenStatus: 'VALID',
+              lastRefreshedAt: new Date(),
+            },
+          })
+        }
       }
     }
 
