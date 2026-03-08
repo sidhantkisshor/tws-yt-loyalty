@@ -15,6 +15,7 @@ const navigation = [
   { name: 'Analytics', href: '/admin/analytics' },
   { name: 'Homework', href: '/admin/homework' },
   { name: 'Webhooks', href: '/admin/webhooks' },
+  { name: 'Ops', href: '/admin/ops' },
 ]
 
 export default function AdminLayout({
